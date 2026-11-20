@@ -1146,9 +1146,17 @@ Deno.serve(async (req) => {
       const { data: member, error: memberError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
       if (memberError) throw memberError;
       if (!member) return json({ ok: false, error: "Not a room member." }, 403);
-      const allowed = ["scale", "x", "y", "sensitivity", "boostDb", "deviceId"];
+      const allowed = ["scale", "x", "y", "sensitivity", "boostDb", "deviceId", "showGrid"];
       const clean: Json = {};
-      for (const key of allowed) if (Object.hasOwn(overrides, key)) clean[key] = overrides[key];
+      for (const key of allowed) {
+        if (!Object.hasOwn(overrides, key)) continue;
+        if (key === "showGrid") {
+          if (typeof overrides[key] !== "boolean") return json({ ok: false, error: "showGrid must be a boolean." }, 400);
+          clean[key] = overrides[key];
+          continue;
+        }
+        clean[key] = overrides[key];
+      }
       const { error } = await db.from("vio_room_overrides").upsert({ room_id: roomId, user_id: user.id, overrides: clean, updated_at: new Date().toISOString() }, { onConflict: "room_id,user_id" });
       if (error) throw error;
       return json({ ok: true });
