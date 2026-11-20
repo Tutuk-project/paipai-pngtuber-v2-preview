@@ -1593,6 +1593,18 @@ function renderRoomControls(options = {}) {
 
   const layoutGroup = createRoomControlGroup("Avatar layout", "Atur skala dan posisi avatar hanya untuk room aktif.");
   const audioGroup = createRoomControlGroup("Audio input", "Atur sumber mikrofon dan sensitivitas deteksi suara.");
+  const centerField = document.createElement("label"); centerField.className = "check-field";
+  const centerToggle = document.createElement("input"); centerToggle.type = "checkbox"; centerToggle.id = "roomCenterGuide"; centerToggle.checked = roomOverrides.showCenterGuide === true;
+  const centerText = document.createElement("span"); centerText.textContent = "Tampilkan karakter patokan di tengah frame";
+  centerToggle.addEventListener("change", async () => {
+    roomOverrides.showCenterGuide = centerToggle.checked;
+    const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
+    if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), showCenterGuide: roomOverrides.showCenterGuide };
+    renderRoomParticipants();
+    try { await api("set_room_override", { room_id: currentRoom.id, overrides: { showCenterGuide: roomOverrides.showCenterGuide } }); await broadcastPlayerLayout(); }
+    catch (error) { showToast("Center guide gagal disimpan: " + error.message, "error"); }
+  });
+  centerField.append(centerToggle, centerText); layoutGroup.fields.append(centerField);
   const gridField = document.createElement("label");
   gridField.className = "check-field";
   const gridToggle = document.createElement("input");
@@ -1777,8 +1789,8 @@ async function broadcastPlayerState(state) {
 
 async function broadcastPlayerLayout() {
   if (!roomChannel || !currentRoom) return;
-  const { scale, x, y, showGrid } = roomOverrides;
-  await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid }, at: Date.now() } });
+  const { scale, x, y, showGrid, showCenterGuide } = roomOverrides;
+  await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid, showCenterGuide }, at: Date.now() } });
 }
 
 async function broadcastMemberAssetsUpdated() {
@@ -1801,7 +1813,8 @@ async function loadRoomMembers() {
       sensitivity: Number(profilePreferences.sensitivity ?? 1),
       boostDb: Number(profilePreferences.boostDb ?? 6),
       deviceId: String(profilePreferences.deviceId || ""),
-      showGrid: false
+      showGrid: false,
+      showCenterGuide: false
     };
     roomOverrides = { ...profileRoomDefaults, ...(ownMember?.overrides || {}) };
     if (audio) {
@@ -1847,7 +1860,7 @@ function renderRoomParticipants() {
   canvas.style.aspectRatio = "16 / 9";
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const slotWidth = canvas.width / Math.max(1, visible.length);
+  const slotWidth = canvas.width;
   const tags = $("participantNames");
   tags.replaceChildren();
   const notice = $("roomStageNotice");
@@ -1891,7 +1904,7 @@ function renderRoomParticipants() {
       entry = { canvas: playerCanvas, renderer: new AvatarRenderer(playerCanvas) };
       roomPreviewRenderers.set(member.user_id, entry);
     }
-    const playerWidth = Math.max(1, Math.round(slotWidth));
+    const playerWidth = Math.max(1, Math.round(canvas.width));
     const playerHeight = Math.max(1, canvas.height);
     if (entry.canvas.width !== playerWidth || entry.canvas.height !== playerHeight) {
       entry.canvas.width = playerWidth;
@@ -1904,7 +1917,7 @@ function renderRoomParticipants() {
       ...(member.preferences || {}),
       scale: overrides.scale ?? member.preferences?.scale ?? 1,
       avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent,
-      offsetX: Math.max(-100, Math.min(100, Number(overrides.x) || 0)) * playerWidth * 0.004,
+      offsetX: Math.max(-100, Math.min(100, Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (index - (visible.length - 1) / 2) * 34)) * playerWidth * 0.004,
       offsetY: Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * playerHeight * 0.0035
     };
     entry.renderer.setAssets(member.assets || {});
@@ -1929,18 +1942,30 @@ function renderRoomParticipants() {
 
 function drawRoomCompositionGrid(ctx, width, height) {
   ctx.save();
-  ctx.strokeStyle = "rgba(210,245,235,.42)";
-  ctx.lineWidth = Math.max(1, Math.round(width / 1600));
-  ctx.setLineDash([Math.max(5, width / 180), Math.max(4, width / 240)]);
+  ctx.strokeStyle = "rgba(210,245,235,.98)";
+  ctx.lineWidth = Math.max(6, Math.round(width / 220));
+  ctx.setLineDash([Math.max(8, width / 150), Math.max(7, width / 190)]);
   for (let index = 1; index <= 2; index++) {
     const x = width * index / 3, y = height * index / 3;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
   }
   ctx.setLineDash([]);
-  ctx.strokeStyle = "rgba(210,245,235,.22)";
+  ctx.strokeStyle = "rgba(210,245,235,.95)";
+  ctx.lineWidth = Math.max(5, Math.round(width / 280));
   ctx.strokeRect(width * .02, height * .02, width * .96, height * .96);
   ctx.restore();
+}
+
+function drawRoomCenterGuide(ctx, width, height) {
+  const cx = width / 2, cy = height / 2, unit = Math.min(width, height) / 1080;
+  const headR = 54 * unit, bodyW = 112 * unit, bodyH = 150 * unit;
+  ctx.save(); ctx.translate(cx, cy); ctx.strokeStyle = "rgba(255,220,170,.98)"; ctx.fillStyle = "rgba(255,220,170,.24)"; ctx.lineWidth = Math.max(5, 5 * unit);
+  ctx.setLineDash([10 * unit, 7 * unit]); ctx.beginPath(); ctx.moveTo(-width * .13, 0); ctx.lineTo(width * .13, 0); ctx.moveTo(0, -height * .25); ctx.lineTo(0, height * .25); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(0, -bodyH * .72, headR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(-bodyW / 2, -bodyH * .48, bodyW, bodyH, 30 * unit); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-bodyW / 2, -bodyH * .30); ctx.lineTo(-bodyW * .95, bodyH * .05); ctx.lineTo(-bodyW * .62, bodyH * .34); ctx.moveTo(bodyW / 2, -bodyH * .30); ctx.lineTo(bodyW * .95, bodyH * .05); ctx.lineTo(bodyW * .62, bodyH * .34); ctx.stroke();
+  ctx.font = "700 " + (22 * unit) + "px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,235,200,.98)"; ctx.fillText("CENTER GUIDE", 0, bodyH * .88); ctx.restore();
 }
 
 function drawRoomStageFrame(now = performance.now()) {
@@ -1954,12 +1979,14 @@ function drawRoomStageFrame(now = performance.now()) {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const visible = roomMembers.slice(0, 4);
-    const slotWidth = canvas.width / Math.max(1, visible.length);
-    visible.forEach((member, index) => {
+    visible.forEach(member => {
       const entry = roomPreviewRenderers.get(member.user_id);
-      if (entry?.canvas) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
+      if (entry?.canvas) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
     });
-    if (visible.some(member => member.overrides?.showGrid === true)) drawRoomCompositionGrid(ctx, canvas.width, canvas.height);
+    const showGrid = visible.some(member => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
+    const showCenter = visible.some(member => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
+    if (showGrid) drawRoomCompositionGrid(ctx, canvas.width, canvas.height);
+    if (showCenter) drawRoomCenterGuide(ctx, canvas.width, canvas.height);
   }
   renderFrame = requestAnimationFrame(drawRoomStageFrame);
 }
