@@ -262,3 +262,57 @@
 .app-shell.in-room .collab-stage-wrap>canvas{display:block;width:100%;height:auto;max-height:65vh;object-fit:contain;aspect-ratio:9/16}
 .app-shell.in-room .room-actions{display:flex;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
 .app-shell.in-room .room-actions .button{flex:1 1 130px;min-width:0}
+
+
+/* Hard repair: collaboration room layout and controls */
+.app-shell.in-room,
+.app-shell.in-room>.workspace,
+.app-shell.in-room #collaborationView,
+.app-shell.in-room #collaborationView>*{min-width:0;max-width:100%;box-sizing:border-box}
+.app-shell.in-room{display:block!important;width:100%!important;overflow-x:hidden}
+.app-shell.in-room>.workspace{display:flex!important;flex-direction:column;width:100%!important;margin:0 auto!important;padding:clamp(10px,3vw,28px)!important}
+.app-shell.in-room .room-toolbar{display:grid!important;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;padding:16px}
+.app-shell.in-room .room-toolbar>div:first-child{min-width:0}
+.app-shell.in-room .room-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;min-width:0;max-width:100%}
+.app-shell.in-room .room-actions>*{width:100%;min-width:0;max-width:100%;justify-self:stretch}
+.app-shell.in-room #roomMicStateBadge{grid-column:1}
+.app-shell.in-room #roomMicToggleButton{grid-column:2}
+.app-shell.in-room #copyRoomCode{grid-column:1}
+.app-shell.in-room #roomObsLink{grid-column:2}
+.app-shell.in-room #exitRoom{grid-column:1/-1}
+.app-shell.in-room .room-actions .button{flex:initial;white-space:normal;overflow-wrap:anywhere}
+.app-shell.in-room .collab-stage-wrap{position:relative;display:grid;justify-items:center;gap:12px;width:100%;min-width:0;padding:12px;overflow:hidden}
+.app-shell.in-room #roomStage{display:block;width:min(100%,360px);height:auto;max-height:58vh;aspect-ratio:9/16;object-fit:contain;border-radius:12px}
+.stage-notice{position:absolute;z-index:2;left:22px;right:22px;top:50%;transform:translateY(-50%);max-width:460px;margin:0 auto;padding:14px 16px;border:1px solid #9ce0c955;border-radius:14px;background:rgba(15,22,29,.94);color:#d9f8ec;text-align:center;font-size:12px;line-height:1.55;box-shadow:0 12px 36px #0008;pointer-events:none}
+.stage-notice.is-error{border-color:#ff8f9c99;background:rgba(44,20,27,.95);color:#ffd0d6}
+.stage-notice[hidden]{display:none!important}
+.participant-names{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;min-width:0}
+.participant-empty{display:block;padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:#ffffff06}
+.room-controls-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.room-control-group{min-width:0;padding:15px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#ffffff07,#ffffff02);display:grid;align-content:start;gap:14px}
+.room-control-heading{display:grid;gap:4px}
+.room-control-heading h3{margin:0;color:var(--text);font-size:13px}
+.room-control-heading p,.room-controls-note{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
+.room-control-fields{display:grid;gap:14px;min-width:0}
+.room-control-field{display:grid;gap:8px;min-width:0}
+.room-control-label-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.room-control-label-row label,.room-control-field>label{font-size:11px;color:var(--muted)}
+.room-control-value{flex:none;padding:4px 8px;border:1px solid #9ce0c933;border-radius:8px;background:#9ce0c90b;color:var(--mint);font-size:10px;font-weight:750;font-variant-numeric:tabular-nums}
+.room-control-field .range-input{display:block;width:100%;margin:0;accent-color:var(--mint)}
+.room-reset-button{justify-self:start}
+.room-controls-note{grid-column:1/-1;padding:2px 2px 0}
+.overlay-link-content{display:grid;gap:9px;padding:18px 20px}
+.overlay-link-content label{font-size:11px;color:var(--muted)}
+.overlay-link-content input{font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.overlay-link-dialog{width:min(94vw,560px)}
+@media(max-width:620px){
+  .app-shell.in-room>.workspace{padding:10px 8px!important;gap:11px}
+  .app-shell.in-room .topbar h1{font-size:23px}
+  .app-shell.in-room .room-toolbar{padding:14px}
+  .app-shell.in-room .room-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .app-shell.in-room .collab-stage-wrap{padding:9px}
+  .app-shell.in-room #roomStage{width:min(100%,320px);max-height:56vh}
+  .room-controls-layout{grid-template-columns:minmax(0,1fr)}
+  .room-control-group{padding:13px}
+  .room-controls-note{grid-column:auto}
+}
