@@ -48,7 +48,7 @@ async function api(action, payload = {}) {
   return data;
 }
 
-function ensurePlayerRenderer(member, slotWidth) {
+function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0) {
   let entry = playerRenderers.get(member.user_id);
   const drawDirectlyToStage = roomPurpose === "personal_overlay" && member.user_id === localMicUserId;
   if (entry && entry.direct !== drawDirectlyToStage) {
@@ -61,7 +61,7 @@ function ensurePlayerRenderer(member, slotWidth) {
     // This avoids rendering an animated offscreen canvas that is only copied
     // when the microphone changes state.
     const playerCanvas = drawDirectlyToStage ? canvas : document.createElement("canvas");
-    playerCanvas.width = Math.max(1, Math.round(slotWidth));
+    playerCanvas.width = Math.max(1, Math.round(stageWidth));
     playerCanvas.height = canvas.height;
     const renderer = new AvatarRenderer(playerCanvas);
     renderer.start();
@@ -69,7 +69,7 @@ function ensurePlayerRenderer(member, slotWidth) {
     playerRenderers.set(member.user_id, entry);
   }
   const { renderer, canvas: playerCanvas } = entry;
-  const width = Math.max(1, Math.round(slotWidth));
+  const width = Math.max(1, Math.round(stageWidth));
   if (playerCanvas.width !== width || playerCanvas.height !== canvas.height) {
     playerCanvas.width = width;
     playerCanvas.height = canvas.height;
@@ -77,12 +77,13 @@ function ensurePlayerRenderer(member, slotWidth) {
   renderer.setAssets(member.assets || {});
   renderer.setAccessories(member.accessories || []);
   const overrides = member.overrides || {};
+  const layoutX = Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (memberIndex - (members.length - 1) / 2) * 34;
   const preferences = {
     ...(member.preferences || {}),
     scale: overrides.scale ?? member.preferences?.scale ?? 1,
     avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent
   };
-  preferences.offsetX = Math.max(-100, Math.min(100, Number(overrides.x) || 0)) * width * 0.004;
+  preferences.offsetX = Math.max(-100, Math.min(100, layoutX)) * width * 0.004;
   preferences.offsetY = Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * canvas.height * 0.0035;
   renderer.setPreferences(preferences);
   const background = preferences.background || {};
@@ -133,9 +134,9 @@ async function startInvisibleSoloMicrophone() {
 
 function drawCompositionGrid(context, width, height) {
   context.save();
-  context.strokeStyle = "rgba(210,245,235,.42)";
-  context.lineWidth = Math.max(1, Math.round(width / 1600));
-  context.setLineDash([Math.max(5, width / 180), Math.max(4, width / 240)]);
+  context.strokeStyle = "rgba(210,245,235,.98)";
+  context.lineWidth = Math.max(6, Math.round(width / 220));
+  context.setLineDash([Math.max(8, width / 150), Math.max(7, width / 190)]);
   for (let index = 1; index <= 2; index++) {
     const x = width * index / 3;
     const y = height * index / 3;
@@ -143,8 +144,22 @@ function drawCompositionGrid(context, width, height) {
     context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
   }
   context.setLineDash([]);
-  context.strokeStyle = "rgba(210,245,235,.22)";
+  context.strokeStyle = "rgba(210,245,235,.95)";
+  context.lineWidth = Math.max(5, Math.round(width / 280));
   context.strokeRect(width * .02, height * .02, width * .96, height * .96);
+  context.restore();
+}
+
+function drawCenterGuide(context, width, height) {
+  const cx = width / 2, cy = height / 2, unit = Math.min(width, height) / 1080;
+  const headR = 54 * unit, bodyW = 112 * unit, bodyH = 150 * unit;
+  context.save(); context.translate(cx, cy);
+  context.strokeStyle = "rgba(255,220,170,.98)"; context.fillStyle = "rgba(255,220,170,.24)"; context.lineWidth = Math.max(5, 5 * unit);
+  context.setLineDash([10 * unit, 7 * unit]); context.beginPath(); context.moveTo(-width * .13, 0); context.lineTo(width * .13, 0); context.moveTo(0, -height * .25); context.lineTo(0, height * .25); context.stroke(); context.setLineDash([]);
+  context.beginPath(); context.arc(0, -bodyH * .72, headR, 0, Math.PI * 2); context.fill(); context.stroke();
+  context.beginPath(); context.roundRect(-bodyW / 2, -bodyH * .48, bodyW, bodyH, 30 * unit); context.fill(); context.stroke();
+  context.beginPath(); context.moveTo(-bodyW / 2, -bodyH * .30); context.lineTo(-bodyW * .95, bodyH * .05); context.lineTo(-bodyW * .62, bodyH * .34); context.moveTo(bodyW / 2, -bodyH * .30); context.lineTo(bodyW * .95, bodyH * .05); context.lineTo(bodyW * .62, bodyH * .34); context.stroke();
+  context.font = "700 " + (22 * unit) + "px system-ui"; context.textAlign = "center"; context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("CENTER GUIDE", 0, bodyH * .88);
   context.restore();
 }
 
@@ -155,12 +170,12 @@ function drawCompositeFrame(now) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const visible = members.slice(0, 4);
     if (visible.length) {
-      const slotWidth = canvas.width / visible.length;
-      visible.forEach((member, index) => {
+      visible.forEach(member => {
         const entry = playerRenderers.get(member.user_id);
-        if (entry && !entry.direct) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
+        if (entry && !entry.direct) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
       });
-      if (visible.some(member => member.overrides?.showGrid === true)) drawCompositionGrid(ctx, canvas.width, canvas.height);
+      if (gridEnabled || visible.some(member => member.overrides?.showGrid === true)) drawCompositionGrid(ctx, canvas.width, canvas.height);
+      if (centerGuideEnabled || visible.some(member => member.overrides?.showCenterGuide === true)) drawCenterGuide(ctx, canvas.width, canvas.height);
     }
   }
   compositeRaf = requestAnimationFrame(drawCompositeFrame);
@@ -177,7 +192,7 @@ function render() {
   }
   const slotWidth = canvas.width / visible.length;
   visible.forEach(member => {
-    const entry = playerRenderers.get(member.user_id) || ensurePlayerRenderer(member, slotWidth);
+    const entry = playerRenderers.get(member.user_id) || ensurePlayerRenderer(member, canvas.width, visible.indexOf(member));
     entry.renderer.setState(states.get(member.user_id) || member.state || "idle");
   });
   if (roomPurpose === "personal_overlay" && visible.length === 1 && visible[0].user_id === localMicUserId) {
@@ -218,7 +233,7 @@ async function refreshMembers() {
       ? (states.get(member.user_id) || "idle")
       : (member.state || "idle");
     states.set(member.user_id, state);
-    ensurePlayerRenderer(member, canvas.width / Math.max(1, Math.min(4, members.length)));
+    ensurePlayerRenderer(member, canvas.width, members.indexOf(member));
   });
   render();
 
@@ -286,7 +301,7 @@ async function boot() {
         const member = members.find(item => item.user_id === payload.user_id);
         if (member) {
           member.overrides = { ...(member.overrides || {}), ...payload.overrides };
-          ensurePlayerRenderer(member, canvas.width / Math.max(1, Math.min(4, members.length)));
+          ensurePlayerRenderer(member, canvas.width, members.indexOf(member));
         }
         render();
       })
