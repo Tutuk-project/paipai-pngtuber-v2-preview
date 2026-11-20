@@ -7,9 +7,8 @@ const menus = [
   { id: "profile", icon: "◉", label: "Profile", title: "Profile" },
   { id: "character", icon: "▧", label: "Character", title: "Character & Assets" },
   { id: "audio", icon: "♫", label: "Microphone", title: "Microphone" },
-  { id: "effects", icon: "✧", label: "Effects", title: "Avatar Effects" },
+  { id: "effects", icon: "✧", label: "Visual Effect +", title: "Visual Effect +" },
   { id: "collaboration", icon: "◎", label: "GO Collaboration", title: "GO Collaboration" },
-  { id: "obs", icon: "▣", label: "OBS Integration", title: "OBS Integration" },
   { id: "tester", icon: "⚗", label: "Test Lab", title: "Test Lab", roles: ["admin", "tester"] },
   { id: "admin", icon: "⬡", label: "Admin Center", title: "Admin Control Center", roles: ["admin"] },
 ];
@@ -27,6 +26,11 @@ let currentMicState = "idle";
 let assetUrls = { idle: null, talking: null, blink: null, talking_blink: null };
 let characterAccessories = [];
 let selectedAccessoryId = null;
+let characterLibrary = [];
+let activeCharacterId = null;
+let activeMakeupEffect = null;
+let characterDeleteDialog = null;
+let avatarScalePercent = 0;
 let profilePreferences = { scale: 1, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "" };
 let roomOverrides = { scale: 1, x: 0, y: 0, sensitivity: 1, boostDb: 6, deviceId: "" };
 let renderFrame = 0;
@@ -135,6 +139,627 @@ function actionButton(text, onClick, primary = false) {
   return button;
 }
 
+function makeSettingsAccordion(title, subtitle = "") {
+  const details = document.createElement("details");
+  details.className = "settings-accordion";
+  const summary = document.createElement("summary");
+  const copy = document.createElement("span");
+  copy.className = "accordion-copy";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  copy.append(heading);
+  if (subtitle) {
+    const hint = document.createElement("small");
+    hint.textContent = subtitle;
+    copy.append(hint);
+  }
+  const chevron = document.createElement("span");
+  chevron.className = "accordion-chevron";
+  chevron.textContent = "›";
+  summary.append(copy, chevron);
+  details.append(summary);
+  const body = document.createElement("div");
+  body.className = "accordion-body";
+  details.append(body);
+  return { details, body };
+}
+
+function showAppToast(message, type = "success") {
+  if (typeof showToast === "function") return showToast(message, type);
+  showMessage("loginMessage", message, type);
+}
+
+async function refreshCharacterLibrary() {
+  const result = await api("character_library");
+  characterLibrary = result.characters || [];
+  activeCharacterId = result.active_character_id || null;
+  return characterLibrary;
+}
+
+async function loadActiveCharacterAssets() {
+  const result = await api("my_assets");
+  activeCharacterId = result.character_id || activeCharacterId;
+  assetUrls = { idle: null, talking: null, blink: null, talking_blink: null, ...(result.assets || {}) };
+  characterAccessories = result.accessories || [];
+  if (result.background) profilePreferences.background = result.background;
+  drawPreview();
+  renderAccessorySettingsList();
+  renderAccessoryQuickScales();
+  return result;
+}
+
+async function switchActiveCharacter(characterId) {
+  await api("set_active_character", { character_id: characterId });
+  activeCharacterId = characterId;
+  await loadActiveCharacterAssets();
+  await refreshCharacterLibrary();
+  renderSettings("character");
+  showAppToast("Avatar aktif berhasil diganti");
+  if (currentRoom) {
+    await loadRoomMembers();
+    await broadcastMemberAssetsUpdated();
+  }
+}
+
+async function createCharacterDraft() {
+  const result = await api("create_character_draft");
+  activeCharacterId = result.character.id;
+  await refreshCharacterLibrary();
+  assetUrls = { idle: null, talking: null, blink: null, talking_blink: null };
+  characterAccessories = [];
+  selectedAccessoryId = null;
+  drawPreview();
+  renderAccessorySettingsList();
+  renderAccessoryQuickScales();
+  renderSettings("character");
+  showAppToast("Draft avatar baru dibuat");
+}
+
+async function saveCurrentCharacter() {
+  if (!activeCharacterId) {
+    await refreshCharacterLibrary();
+    if (!activeCharacterId) throw new Error("Draft avatar belum tersedia.");
+  }
+  const result = await api("save_character", { character_id: activeCharacterId });
+  await refreshCharacterLibrary();
+  renderSettings("character");
+  showAppToast(result.already_saved ? "Perubahan avatar sudah tersimpan otomatis" : `${result.character.name} berhasil disimpan`);
+}
+
+function openCharacterDeleteDialog() {
+  if (!characterDeleteDialog) {
+    characterDeleteDialog = document.createElement("dialog");
+    characterDeleteDialog.className = "modal character-delete-dialog";
+    characterDeleteDialog.innerHTML = `
+      <div class="modal-heading">
+        <div><p class="eyebrow">AVATAR LIBRARY</p><h2>Hapus karakter</h2></div>
+        <button class="icon-button character-dialog-close" type="button" aria-label="Tutup">×</button>
+      </div>
+      <div class="character-delete-list"></div>`;
+    characterDeleteDialog.querySelector(".character-dialog-close").addEventListener("click", () => characterDeleteDialog.close());
+    characterDeleteDialog.addEventListener("click", event => {
+      if (event.target === characterDeleteDialog) characterDeleteDialog.close();
+    });
+    document.body.append(characterDeleteDialog);
+  }
+  const list = characterDeleteDialog.querySelector(".character-delete-list");
+  list.replaceChildren();
+  const saved = characterLibrary.filter(item => item.is_saved);
+  if (!saved.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted character-empty";
+    empty.textContent = "Belum ada karakter tersimpan.";
+    list.append(empty);
+  }
+  for (const character of saved) {
+    const row = document.createElement("div");
+    row.className = "character-delete-row";
+    const image = document.createElement("img");
+    image.alt = "";
+    image.src = character.preview || "";
+    image.hidden = !character.preview;
+    const fallback = document.createElement("span");
+    fallback.className = "character-thumb-fallback";
+    fallback.textContent = "✧";
+    fallback.hidden = !!character.preview;
+    const name = document.createElement("strong");
+    name.textContent = character.name;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "icon-button delete-icon-button";
+    remove.setAttribute("aria-label", `Hapus ${character.name}`);
+    remove.title = `Hapus ${character.name}`;
+    remove.textContent = "▣";
+    remove.addEventListener("click", async () => {
+      remove.disabled = true;
+      try {
+        const result = await api("delete_character", { character_id: character.id });
+        activeCharacterId = result.active_character_id || null;
+        await refreshCharacterLibrary();
+        await loadActiveCharacterAssets();
+        openCharacterDeleteDialog();
+        renderSettings("character");
+        if (currentRoom) {
+          await loadRoomMembers();
+          await broadcastMemberAssetsUpdated();
+        }
+        showAppToast(`${character.name} dihapus`);
+      } catch (error) {
+        remove.disabled = false;
+        showAppToast(`Gagal menghapus karakter: ${error.message}`, "error");
+      }
+    });
+    const copy = document.createElement("div");
+    copy.className = "character-delete-copy";
+    copy.append(name, document.createTextNode(character.is_active ? "Sedang digunakan" : "Avatar tersimpan"));
+    const thumb = document.createElement("div");
+    thumb.className = "character-delete-thumb";
+    thumb.append(image, fallback);
+    row.append(thumb, copy, remove);
+    list.append(row);
+  }
+  if (!characterDeleteDialog.open) characterDeleteDialog.showModal();
+}
+
+function buildExpressionUploadTile(state, labelText) {
+  const tile = document.createElement("div");
+  tile.className = "expression-upload-tile";
+  tile.dataset.expression = state;
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/png,image/webp";
+  input.hidden = true;
+  input.setAttribute("aria-label", `Upload ${labelText}`);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "expression-upload-button";
+  button.setAttribute("aria-label", `Tambah ${labelText}`);
+  const preview = document.createElement("img");
+  preview.className = "expression-upload-preview";
+  preview.alt = labelText;
+  const plus = document.createElement("span");
+  plus.className = "expression-upload-plus";
+  plus.textContent = "+";
+  const caption = document.createElement("span");
+  caption.className = "expression-upload-caption";
+  caption.textContent = labelText;
+  button.append(preview, plus, caption);
+  const updatePreview = () => {
+    const src = assetUrls[state];
+    preview.hidden = !src;
+    plus.hidden = !!src;
+    preview.src = src || "";
+    tile.classList.toggle("has-image", !!src);
+  };
+  button.addEventListener("click", () => input.click());
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    await uploadCharacterAsset(state, file);
+    updatePreview();
+  });
+  tile.append(input, button);
+  updatePreview();
+  return tile;
+}
+
+function renderCharacterWorkspace(content) {
+  const characterGroup = makeSettingsAccordion("Character & Assets", "Avatar tersimpan, ekspresi PNG, dan aksesori");
+  const selectorField = document.createElement("div");
+  selectorField.className = "setting-field character-selector-field";
+  const selectorLabel = document.createElement("label");
+  selectorLabel.textContent = "Avatar tersimpan";
+  selectorLabel.htmlFor = "savedCharacterSelect";
+  const select = document.createElement("select");
+  select.id = "savedCharacterSelect";
+  select.className = "select-input";
+  const saved = characterLibrary.filter(item => item.is_saved);
+  const active = characterLibrary.find(item => item.id === activeCharacterId);
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = saved.length ? "Pilih avatar tersimpan" : "Belum ada karakter";
+  placeholder.disabled = true;
+  placeholder.selected = !active?.is_saved;
+  select.append(placeholder);
+  for (const character of saved) {
+    const option = document.createElement("option");
+    option.value = character.id;
+    option.textContent = character.name;
+    option.selected = character.id === activeCharacterId;
+    select.append(option);
+  }
+  if (active && !active.is_saved) {
+    const draft = document.createElement("option");
+    draft.value = active.id;
+    draft.textContent = "Draft baru · belum disimpan";
+    draft.selected = true;
+    select.append(draft);
+  }
+  const createOption = document.createElement("option");
+  createOption.value = "__new_avatar__";
+  createOption.textContent = "＋ Buat avatar baru";
+  select.append(createOption);
+  select.addEventListener("change", async () => {
+    const value = select.value;
+    try {
+      if (value === "__new_avatar__") await createCharacterDraft();
+      else if (value) await switchActiveCharacter(value);
+    } catch (error) {
+      showAppToast(`Tidak dapat mengganti avatar: ${error.message}`, "error");
+      renderSettings("character");
+    }
+  });
+  selectorField.append(selectorLabel, select);
+
+  const uploadTitle = document.createElement("p");
+  uploadTitle.className = "muted";
+  uploadTitle.textContent = "Tekan tombol + untuk menambahkan ekspresi. Setelah diunggah, file tampil sebagai thumbnail tanpa nama file.";
+  const uploadGrid = document.createElement("div");
+  uploadGrid.className = "expression-upload-grid";
+  for (const [state, label] of [["idle","Idle"],["talking","Talking"],["blink","Blink"],["talking_blink","Talking Blink"]]) {
+    uploadGrid.append(buildExpressionUploadTile(state, label));
+  }
+  const characterActions = document.createElement("div");
+  characterActions.className = "character-action-row";
+  characterActions.append(
+    actionButton("Simpan karakter", () => saveCurrentCharacter().catch(error => showAppToast(error.message, "error")), true),
+    actionButton("Hapus karakter", openCharacterDeleteDialog)
+  );
+
+  const accessorySection = document.createElement("section");
+  accessorySection.className = "accessory-library";
+  const accessoryHeading = document.createElement("div");
+  accessoryHeading.className = "accessory-library-heading";
+  const accessoryTitle = document.createElement("h3");
+  accessoryTitle.textContent = "Accessories";
+  const accessoryHint = document.createElement("p");
+  accessoryHint.className = "muted";
+  accessoryHint.textContent = "Tekan + untuk mengunggah, lalu geser aksesori langsung di jendela preview. Skala tiap aksesori tersedia di bawah indikator mikrofon.";
+  accessoryHeading.append(accessoryTitle, accessoryHint);
+  const accessoryInput = document.createElement("input");
+  accessoryInput.type = "file";
+  accessoryInput.accept = "image/png,image/webp";
+  accessoryInput.multiple = true;
+  accessoryInput.hidden = true;
+  const accessoryAdd = document.createElement("button");
+  accessoryAdd.type = "button";
+  accessoryAdd.className = "accessory-add-tile";
+  accessoryAdd.innerHTML = '<span>+</span><small>Tambah aksesori</small>';
+  accessoryAdd.addEventListener("click", () => accessoryInput.click());
+  accessoryInput.addEventListener("change", async () => {
+    const files = [...(accessoryInput.files || [])];
+    accessoryInput.value = "";
+    await uploadCharacterAccessories(files);
+  });
+  const accessoryControls = document.createElement("div");
+  accessoryControls.id = "accessorySettingsList";
+  accessoryControls.className = "accessory-library-grid";
+  accessorySection.append(accessoryHeading, accessoryInput, accessoryAdd, accessoryControls);
+
+  const uploadCard = document.createElement("div");
+  uploadCard.className = "character-upload-section";
+  uploadCard.append(selectorField, uploadTitle, uploadGrid, characterActions, accessorySection);
+  characterGroup.body.append(uploadCard);
+
+  const main = makeSettingsAccordion("Main Settings", "Gerakan avatar, mirror, dan resolusi output");
+  const motion = document.createElement("div");
+  motion.className = "setting-grid";
+  const fields = [
+    ["bounce", "Talking bounce", 0, 0.12, 0.005, 0.035],
+    ["squash", "Talking squash", 0, 0.25, 0.005, 0.07],
+    ["bounceMs", "Bounce duration (ms)", 120, 600, 10, 240],
+    ["idleBob", "Idle bob", 0, 0.03, 0.001, 0.006],
+    ["sway", "Sway (degrees)", 0, 18, 0.5, 0],
+    ["breathing", "Breathing (%)", 0, 8, 0.25, 0],
+    ["blinkRate", "Blink rate", 1, 12, 0.5, 4],
+    ["fps", "Preview FPS", 10, 60, 5, 30]
+  ];
+  for (const [key, label, min, max, step, defaultValue] of fields) {
+    const field = settingField(label, `main_${key}`, String(profilePreferences[key] ?? defaultValue), "", "range");
+    const input = field.querySelector("input");
+    input.min = String(min); input.max = String(max); input.step = String(step);
+    input.addEventListener("input", () => { profilePreferences[key] = Number(input.value); drawPreview(); });
+    motion.append(field);
+  }
+  const mirror = document.createElement("label");
+  mirror.className = "check-field";
+  const mirrorInput = document.createElement("input");
+  mirrorInput.type = "checkbox";
+  mirrorInput.checked = profilePreferences.mirror !== false;
+  mirrorInput.addEventListener("change", () => { profilePreferences.mirror = mirrorInput.checked; drawPreview(); });
+  mirror.append(mirrorInput, document.createTextNode("Mirror avatar"));
+  motion.append(mirror);
+
+  const resolutionTitle = document.createElement("h3");
+  resolutionTitle.textContent = "Output resolution";
+  const resolution = document.createElement("div");
+  resolution.className = "setting-grid";
+  const presetField = document.createElement("div");
+  presetField.className = "setting-field";
+  const presetLabel = document.createElement("label");
+  presetLabel.textContent = "Preset";
+  const preset = document.createElement("select");
+  preset.className = "select-input";
+  preset.innerHTML = '<option value="1080x1920">TikTok Portrait · 1080 × 1920</option><option value="720x1280">Portrait HD · 720 × 1280</option><option value="1920x1080">Landscape Full HD · 1920 × 1080</option><option value="1280x720">Landscape HD · 1280 × 720</option><option value="1080x1080">Square · 1080 × 1080</option><option value="custom">Custom dimensions</option>';
+  const key = `${Number(profilePreferences.outputWidth) || 1080}x${Number(profilePreferences.outputHeight) || 1920}`;
+  preset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080"].includes(key) ? key : "custom";
+  const widthField = settingField("Width (px)", "main_outputWidth", String(profilePreferences.outputWidth || 1080));
+  const width = widthField.querySelector("input"); width.type = "number"; width.min = "320"; width.max = "3840"; width.step = "1";
+  const heightField = settingField("Height (px)", "main_outputHeight", String(profilePreferences.outputHeight || 1920));
+  const height = heightField.querySelector("input"); height.type = "number"; height.min = "320"; height.max = "3840"; height.step = "1";
+  const applyResolution = () => {
+    const nextWidth = Math.max(320, Math.min(3840, Math.round(Number(width.value) || 1080)));
+    const nextHeight = Math.max(320, Math.min(3840, Math.round(Number(height.value) || 1920)));
+    if (nextWidth * nextHeight > 8294400) return showAppToast("Resolusi melebihi batas 8,3 megapiksel.", "error");
+    profilePreferences.outputWidth = nextWidth;
+    profilePreferences.outputHeight = nextHeight;
+    width.value = String(nextWidth); height.value = String(nextHeight);
+    const nextKey = `${nextWidth}x${nextHeight}`;
+    preset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080"].includes(nextKey) ? nextKey : "custom";
+    drawPreview();
+  };
+  preset.addEventListener("change", () => {
+    if (preset.value === "custom") return;
+    const [nextWidth,nextHeight] = preset.value.split("x").map(Number);
+    profilePreferences.outputWidth = nextWidth; profilePreferences.outputHeight = nextHeight;
+    width.value = String(nextWidth); height.value = String(nextHeight);
+    drawPreview();
+  });
+  width.addEventListener("change", applyResolution);
+  height.addEventListener("change", applyResolution);
+  presetField.append(presetLabel, preset);
+  resolution.append(presetField, widthField, heightField);
+  const save = actionButton("Simpan Main Settings", async () => {
+    try {
+      await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: profilePreferences });
+      drawPreview();
+      if (currentRoom) await broadcastMemberAssetsUpdated();
+      showAppToast("Main Settings tersimpan");
+    } catch (error) { showAppToast(`Gagal menyimpan: ${error.message}`, "error"); }
+  }, true);
+  main.body.append(motion, resolutionTitle, resolution, save);
+
+  content.append(characterGroup.details, main.details);
+  renderAccessorySettingsList();
+  renderAccessoryQuickScales();
+}
+
+function buildEffectDefaults(raw = {}) {
+  const states = ["idle", "talking", "blink", "talking_blink"];
+  const definitions = [
+    ["filter", { intensity: 55, color: "#ffd7b8", filter: { hue: 0, saturation: 100, brightness: 100, contrast: 100, invert: 0, grayscale: 0, sepia: 0 } }],
+    ["stroke", { intensity: 55, color: "#ffd7b8", thickness: 8, invert: false }],
+    ["shadow", { intensity: 55, color: "#101010" }],
+    ["bloom", { intensity: 55, color: "#ffd7b8" }],
+    ["distort", { intensity: 20, color: "#ffd7b8" }],
+    ["eagle", { intensity: 55, color: "#ffd7b8" }],
+    ["shake", { intensity: 55, color: "#ffd7b8" }]
+  ];
+  const effects = {
+    enabled: typeof raw.enabled === "boolean" ? raw.enabled : definitions.some(([key]) => raw[key]?.enabled),
+    stickerEffectsEnabled: raw.stickerEffectsEnabled !== false
+  };
+  for (const [key, defaults] of definitions) {
+    const old = key === "bloom" && !raw.bloom ? raw.glow || {} : raw[key] || {};
+    const storedStates = Array.isArray(old.states) ? old.states.map(value => value === "talkingBlink" ? "talking_blink" : value) : states;
+    const storedTargets = Array.isArray(old.targets) ? old.targets : ["avatar", "accessories"];
+    effects[key] = {
+      ...defaults, ...old,
+      states: storedStates.includes("all") ? states : storedStates.filter(value => states.includes(value)),
+      targets: storedTargets.includes("all") ? ["avatar", "accessories"] : storedTargets.filter(value => ["avatar","accessories"].includes(value))
+    };
+    if (key === "filter") effects[key].filter = { ...defaults.filter, ...(old.filter || {}) };
+  }
+  return effects;
+}
+
+function renderVisualEffectWorkspace(content) {
+  const prefs = profilePreferences;
+  const background = { mode: "transparent", ...(prefs.background || {}) };
+  const bgGroup = makeSettingsAccordion("Background", "Warna, gradient, gambar, GIF, atau video");
+  const modeField = document.createElement("div");
+  modeField.className = "setting-field";
+  const modeLabel = document.createElement("label");
+  modeLabel.textContent = "Background mode";
+  const mode = document.createElement("select");
+  mode.className = "select-input";
+  mode.innerHTML = '<option value="transparent">Transparent</option><option value="solid">Solid color</option><option value="gradient">Gradient</option><option value="image">Image / GIF</option><option value="video">Video</option>';
+  mode.value = background.mode;
+  const palette = document.createElement("div");
+  palette.className = "background-palette";
+  const paletteItems = [];
+  for (const [key, label, initial] of [["color","Solid",background.color || "#11151b"],["color1","Start",background.color1 || "#254c4a"],["color2","End",background.color2 || "#e2b48c"]]) {
+    const item = document.createElement("label");
+    item.className = "palette-swatch";
+    const input = document.createElement("input");
+    input.type = "color"; input.value = initial; input.title = label; input.setAttribute("aria-label", label);
+    const caption = document.createElement("small"); caption.textContent = label;
+    input.addEventListener("input", () => {
+      background[key] = input.value;
+      prefs.background = { ...background };
+      drawPreview();
+    });
+    item.append(input, caption);
+    palette.append(item);
+    paletteItems.push(item);
+  }
+  const syncPalette = () => {
+    palette.hidden = !["solid","gradient"].includes(mode.value);
+    paletteItems[0].hidden = mode.value !== "solid";
+    paletteItems[1].hidden = mode.value !== "gradient";
+    paletteItems[2].hidden = mode.value !== "gradient";
+  };
+  mode.addEventListener("change", () => {
+    background.mode = mode.value;
+    prefs.background = { ...background };
+    syncPalette();
+    drawPreview();
+  });
+  modeField.append(modeLabel, mode);
+
+  const mediaWrap = document.createElement("div");
+  mediaWrap.className = "background-upload-row";
+  const mediaInput = document.createElement("input");
+  mediaInput.type = "file"; mediaInput.hidden = true;
+  mediaInput.accept = "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm";
+  const mediaButton = document.createElement("button");
+  mediaButton.type = "button";
+  mediaButton.className = "background-upload-button";
+  mediaButton.innerHTML = '<span class="upload-plus">+</span><span>Tambah background</span>';
+  mediaButton.addEventListener("click", () => mediaInput.click());
+  mediaInput.addEventListener("change", async () => {
+    const file = mediaInput.files?.[0]; mediaInput.value = "";
+    if (!file) return;
+    if (!supabase || !currentUser) return showAppToast("Backend belum siap.", "error");
+    const isVideo = file.type.startsWith("video/");
+    const allowed = ["image/png","image/jpeg","image/webp","image/gif","video/mp4","video/webm"];
+    const limit = isVideo ? 50 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (!allowed.includes(file.type) || file.size < 1 || file.size > limit) return showAppToast("Format atau ukuran background tidak didukung.", "error");
+    const ext = { "image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif","video/mp4":"mp4","video/webm":"webm" }[file.type];
+    const storagePath = `${currentUser.id}/background/${crypto.randomUUID()}.${ext}`;
+    try {
+      const { error } = await supabase.storage.from("vio-backgrounds").upload(storagePath, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
+      if (error) throw error;
+      const saved = await api("record_background_asset", { storage_path: storagePath, mime_type: file.type, size_bytes: file.size });
+      Object.assign(background, saved.background);
+      prefs.background = { ...background };
+      mode.value = background.mode;
+      drawPreview();
+      if (currentRoom) await loadRoomMembers();
+      await broadcastMemberAssetsUpdated();
+      showAppToast("Background berhasil diunggah");
+      renderSettings("effects");
+    } catch (error) {
+      await supabase.storage.from("vio-backgrounds").remove([storagePath]).catch(() => {});
+      showAppToast(`Upload background gagal: ${error.message}`, "error");
+    }
+  });
+  const clearBackground = actionButton("Hapus background tersimpan", async () => {
+    try {
+      const result = await api("clear_background");
+      Object.assign(background, result.background);
+      prefs.background = { ...background };
+      mode.value = "transparent";
+      syncPalette();
+      drawPreview();
+      showAppToast("Background direset");
+      if (currentRoom) await loadRoomMembers();
+      await broadcastMemberAssetsUpdated();
+    } catch (error) { showAppToast(`Gagal menghapus background: ${error.message}`, "error"); }
+  });
+  mediaWrap.append(mediaButton, mediaInput, clearBackground);
+  bgGroup.body.append(modeField, palette, mediaWrap);
+  syncPalette();
+
+  const makeup = makeSettingsAccordion("Makeup", "Pilih efek untuk membuka parameter");
+  const effects = buildEffectDefaults(prefs.effects || {});
+  const global = document.createElement("label");
+  global.className = "check-field";
+  const globalToggle = document.createElement("input");
+  globalToggle.type = "checkbox"; globalToggle.checked = !!effects.enabled;
+  globalToggle.addEventListener("change", () => { effects.enabled = globalToggle.checked; prefs.effects = effects; drawPreview(); });
+  global.append(globalToggle, document.createTextNode("Aktifkan Visual Effect +"));
+  const accessorySwitch = document.createElement("label");
+  accessorySwitch.className = "check-field";
+  const accessoryToggle = document.createElement("input");
+  accessoryToggle.type = "checkbox"; accessoryToggle.checked = effects.stickerEffectsEnabled;
+  accessoryToggle.addEventListener("change", () => { effects.stickerEffectsEnabled = accessoryToggle.checked; prefs.effects = effects; drawPreview(); });
+  accessorySwitch.append(accessoryToggle, document.createTextNode("Izinkan efek pada aksesori"));
+  const effectDefinitions = [["filter","Filter warna"],["stroke","Stroke"],["shadow","Shadow"],["bloom","Emission / bloom"],["distort","Distorsi"],["eagle","Eagle eye"],["shake","Bergetar"]];
+  const buttonGrid = document.createElement("div");
+  buttonGrid.className = "makeup-button-grid";
+  const parameterPanel = document.createElement("div");
+  parameterPanel.className = "makeup-parameter-panel";
+  const renderPanel = key => {
+    parameterPanel.replaceChildren();
+    if (!key) { parameterPanel.hidden = true; return; }
+    parameterPanel.hidden = false;
+    const effect = effects[key];
+    const title = document.createElement("h3");
+    title.textContent = effectDefinitions.find(item => item[0] === key)?.[1] || key;
+    const active = document.createElement("label");
+    active.className = "check-field";
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox"; enabled.checked = !!effect.enabled;
+    enabled.addEventListener("change", () => { effect.enabled = enabled.checked; prefs.effects = effects; drawPreview(); });
+    active.append(enabled, document.createTextNode("Aktif"));
+    parameterPanel.append(title, active);
+    const addRange = (labelText, value, min, max, step, onChange) => {
+      const field = document.createElement("label"); field.className = "setting-field";
+      const label = document.createElement("span"); label.textContent = `${labelText}: ${value}`;
+      const input = document.createElement("input"); input.type = "range"; input.min = String(min); input.max = String(max); input.step = String(step); input.value = String(value);
+      input.addEventListener("input", () => { const next = Number(input.value); label.textContent = `${labelText}: ${next}`; onChange(next); prefs.effects = effects; drawPreview(); });
+      field.append(label, input); parameterPanel.append(field);
+    };
+    const addCheck = (labelText, value, onChange) => {
+      const field = document.createElement("label"); field.className = "check-field";
+      const input = document.createElement("input"); input.type = "checkbox"; input.checked = !!value;
+      input.addEventListener("change", () => { onChange(input.checked); prefs.effects = effects; drawPreview(); });
+      field.append(input, document.createTextNode(labelText)); parameterPanel.append(field);
+    };
+    addRange("Intensitas", effect.intensity, 0, 100, 1, value => effect.intensity = value);
+    if (["stroke","shadow","bloom"].includes(key)) {
+      const colorRow = document.createElement("label"); colorRow.className = "setting-field";
+      const caption = document.createElement("span"); caption.textContent = "Warna";
+      const color = document.createElement("input"); color.type = "color"; color.value = effect.color || "#ffd7b8";
+      color.addEventListener("input", () => { effect.color = color.value; prefs.effects = effects; drawPreview(); });
+      colorRow.append(caption, color); parameterPanel.append(colorRow);
+    }
+    if (key === "stroke") {
+      addRange("Ketebalan", effect.thickness || 8, 1, 24, 1, value => effect.thickness = value);
+      addCheck("Mode invert", effect.invert, value => effect.invert = value);
+    }
+    if (key === "filter") {
+      for (const [prop,label,min,max,step] of [["hue","Hue",-180,180,1],["saturation","Saturation",0,200,1],["brightness","Brightness",0,200,1],["contrast","Contrast",0,200,1],["invert","Invert",0,100,1],["grayscale","Grayscale",0,100,1],["sepia","Sepia",0,100,1]]) {
+        addRange(label, effect.filter[prop], min, max, step, value => effect.filter[prop] = value);
+      }
+    }
+    const stateWrap = document.createElement("div"); stateWrap.className = "makeup-chip-list";
+    for (const [state,label] of [["idle","Idle"],["talking","Talking"],["blink","Blink"],["talking_blink","Talking + Blink"]]) {
+      addCheck(label, effect.states.includes(state), checked => {
+        effect.states = checked ? [...new Set([...effect.states,state])] : effect.states.filter(item => item !== state);
+      });
+    }
+    parameterPanel.append(stateWrap);
+    const targetWrap = document.createElement("div"); targetWrap.className = "makeup-chip-list";
+    for (const [target,label] of [["avatar","Avatar"],["accessories","Aksesori"]]) {
+      addCheck(label, effect.targets.includes(target), checked => {
+        effect.targets = checked ? [...new Set([...effect.targets,target])] : effect.targets.filter(item => item !== target);
+      });
+    }
+    parameterPanel.append(targetWrap);
+  };
+  for (const [key,label] of effectDefinitions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "makeup-effect-button";
+    button.textContent = label;
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", () => {
+      const same = activeMakeupEffect === key;
+      activeMakeupEffect = same ? null : key;
+      for (const candidate of buttonGrid.children) {
+        candidate.classList.toggle("active", candidate.dataset.effect === activeMakeupEffect);
+        candidate.setAttribute("aria-pressed", String(candidate.dataset.effect === activeMakeupEffect));
+      }
+      renderPanel(activeMakeupEffect);
+    });
+    button.dataset.effect = key;
+    buttonGrid.append(button);
+  }
+  const save = actionButton("Simpan Visual Effect +", async () => {
+    prefs.effects = effects;
+    try {
+      await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: prefs });
+      await broadcastMemberAssetsUpdated();
+      showAppToast("Visual Effect + tersimpan");
+    } catch (error) { showAppToast(`Gagal menyimpan efek: ${error.message}`, "error"); }
+  }, true);
+  makeup.body.append(global, accessorySwitch, buttonGrid, parameterPanel, save);
+  content.append(bgGroup.details, makeup.details);
+}
+
 function renderSettings(menuId) {
   const content = $("settingsContent");
   content.replaceChildren();
@@ -165,47 +790,7 @@ function renderSettings(menuId) {
   }
 
   if (menuId === "character") {
-    const note = document.createElement("p");
-    note.className = "muted";
-    note.textContent = "Upload empat ekspresi PNG transparan. Versi ini menyiapkan struktur aset v2.0; integrasi seluruh renderer/effects v1.0 dilakukan setelah source repo tersambung.";
-    const grid = document.createElement("div");
-    grid.className = "setting-grid";
-    for (const state of ["idle", "talking", "blink", "talking_blink"]) {
-      const field = document.createElement("div");
-      field.className = "setting-field";
-      const label = document.createElement("label");
-      label.textContent = state.replace("_", " ").toUpperCase() + " PNG";
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/png,image/webp";
-      input.className = "text-input";
-      input.addEventListener("change", () => uploadCharacterAsset(state, input.files?.[0]));
-      field.append(label, input);
-      grid.append(field);
-    }
-    const accessorySection = document.createElement("section");
-    accessorySection.className = "panel-card";
-    accessorySection.style.cssText = "margin-top:14px;padding:14px";
-    const accessoryTitle = document.createElement("h3");
-    accessoryTitle.textContent = "Accessories";
-    const accessoryHint = document.createElement("p");
-    accessoryHint.className = "muted";
-    accessoryHint.textContent = "Tambahkan PNG/WebP transparan. Pilih aksesori lalu seret langsung pada preview; slider tetap tersedia untuk penyesuaian presisi.";
-    const accessoryInput = document.createElement("input");
-    accessoryInput.type = "file";
-    accessoryInput.accept = "image/png,image/webp";
-    accessoryInput.multiple = true;
-    accessoryInput.className = "text-input";
-    accessoryInput.addEventListener("change", async () => {
-      await uploadCharacterAccessories(accessoryInput.files);
-      accessoryInput.value = "";
-    });
-    const accessoryList = document.createElement("div");
-    accessoryList.id = "accessorySettingsList";
-    accessoryList.className = "setting-grid";
-    accessorySection.append(accessoryTitle, accessoryHint, accessoryInput, accessoryList);
-    content.append(note, grid, accessorySection);
-    renderAccessorySettingsList();
+    renderCharacterWorkspace(content);
     return;
   }
 
@@ -245,249 +830,7 @@ function renderSettings(menuId) {
   }
 
   if (menuId === "effects") {
-    const prefs = profilePreferences;
-    const grid = document.createElement("div"); grid.className = "setting-grid";
-    const fields = [
-      ["bounce", "Talking bounce", 0, 0.12, 0.005],
-      ["squash", "Talking squash", 0, 0.25, 0.005],
-      ["bounceMs", "Bounce duration (ms)", 120, 600, 10],
-      ["idleBob", "Idle bob", 0, 0.03, 0.001],
-      ["sway", "Sway (degrees)", 0, 18, 0.5],
-      ["breathing", "Breathing (%)", 0, 8, 0.25],
-      ["blinkRate", "Blink rate", 1, 12, 0.5],
-      ["fps", "Preview FPS", 10, 60, 5]
-    ];
-    for (const [key, label, min, max, step] of fields) {
-      const field = settingField(label, `effect_${key}`, String(prefs[key] ?? ({bounce:0.035,squash:0.07,bounceMs:240,idleBob:0.006,sway:0,breathing:0,blinkRate:4,fps:30}[key])), "", "range");
-      const input = field.querySelector("input"); input.min = String(min); input.max = String(max); input.step = String(step);
-      input.addEventListener("input", () => { prefs[key] = Number(input.value); drawPreview(); });
-      grid.append(field);
-    }
-    const mirrorField = document.createElement("label"); mirrorField.className = "check-field";
-    const mirror = document.createElement("input"); mirror.type = "checkbox"; mirror.checked = prefs.mirror !== false;
-    mirror.addEventListener("change", () => { prefs.mirror = mirror.checked; drawPreview(); });
-    mirrorField.append(mirror, document.createTextNode("Mirror avatar")); grid.append(mirrorField);
-
-    const resolutionTitle = document.createElement("h3"); resolutionTitle.textContent = "Output resolution";
-    const resolutionWrap = document.createElement("div"); resolutionWrap.className = "setting-grid";
-    const resolutionPresetField = document.createElement("div"); resolutionPresetField.className = "setting-field";
-    const resolutionPresetLabel = document.createElement("label"); resolutionPresetLabel.textContent = "Preset";
-    const resolutionPreset = document.createElement("select"); resolutionPreset.className = "select-input";
-    resolutionPreset.innerHTML = '<option value="1080x1920">TikTok Portrait · 1080 × 1920</option><option value="720x1280">Portrait HD · 720 × 1280</option><option value="1920x1080">Landscape Full HD · 1920 × 1080</option><option value="1280x720">Landscape HD · 1280 × 720</option><option value="1080x1080">Square · 1080 × 1080</option><option value="custom">Custom dimensions</option>';
-    const resolutionKey = `${Number(prefs.outputWidth) || 1080}x${Number(prefs.outputHeight) || 1920}`;
-    resolutionPreset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080"].includes(resolutionKey) ? resolutionKey : "custom";
-    resolutionPreset.addEventListener("change", () => {
-      if (resolutionPreset.value !== "custom") {
-        const [width, height] = resolutionPreset.value.split("x").map(Number);
-        prefs.outputWidth = width; prefs.outputHeight = height;
-        widthInput.value = String(width); heightInput.value = String(height);
-        drawPreview();
-      }
-    });
-    resolutionPresetField.append(resolutionPresetLabel, resolutionPreset);
-    const widthField = settingField("Width (px)", "outputWidth", String(prefs.outputWidth || 1080), "320–3840 px");
-    const widthInput = widthField.querySelector("input"); widthInput.type = "number"; widthInput.min = "320"; widthInput.max = "3840"; widthInput.step = "1";
-    const heightField = settingField("Height (px)", "outputHeight", String(prefs.outputHeight || 1920), "320–3840 px");
-    const heightInput = heightField.querySelector("input"); heightInput.type = "number"; heightInput.min = "320"; heightInput.max = "3840"; heightInput.step = "1";
-    const applyCustomResolution = () => {
-      const width = Math.max(320, Math.min(3840, Math.round(Number(widthInput.value) || 1080)));
-      const height = Math.max(320, Math.min(3840, Math.round(Number(heightInput.value) || 1920)));
-      if (width * height > 8294400) return alert("Output dibatasi maksimal 8,3 megapiksel agar perangkat tidak kehabisan memori.");
-      widthInput.value = String(width); heightInput.value = String(height);
-      prefs.outputWidth = width; prefs.outputHeight = height;
-      const key = `${width}x${height}`;
-      resolutionPreset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080"].includes(key) ? key : "custom";
-      drawPreview();
-    };
-    widthInput.addEventListener("change", applyCustomResolution);
-    heightInput.addEventListener("change", applyCustomResolution);
-    resolutionWrap.append(resolutionPresetField, widthField, heightField);
-
-    const backgroundTitle = document.createElement("h3"); backgroundTitle.textContent = "Background";
-    const background = { mode: "transparent", ...(prefs.background || {}) };
-    const bgWrap = document.createElement("div"); bgWrap.className = "setting-grid";
-    const modeField = document.createElement("div"); modeField.className = "setting-field";
-    const modeLabel = document.createElement("label"); modeLabel.textContent = "Background mode";
-    const mode = document.createElement("select"); mode.className = "select-input";
-    mode.innerHTML = '<option value="transparent">Transparent</option><option value="solid">Solid color</option><option value="gradient">Gradient</option><option value="image">Image / GIF</option><option value="video">Video</option>';
-    mode.value = background.mode;
-    mode.addEventListener("change", () => { background.mode = mode.value; prefs.background = { ...background }; drawPreview(); });
-    modeField.append(modeLabel, mode); bgWrap.append(modeField);
-    for (const [key,label,initial] of [["color","Solid color",background.color || "#11151b"],["color1","Gradient start",background.color1 || "#254c4a"],["color2","Gradient end",background.color2 || "#e2b48c"]]) {
-      const field = document.createElement("div"); field.className = "setting-field";
-      const caption = document.createElement("label"); caption.textContent = label;
-      const input = document.createElement("input"); input.type = "color"; input.className = "text-input"; input.value = initial;
-      input.addEventListener("input", () => { background[key] = input.value; prefs.background = { ...background }; drawPreview(); });
-      field.append(caption,input); bgWrap.append(field);
-    }
-    const mediaField = document.createElement("div"); mediaField.className = "setting-field";
-    const mediaLabel = document.createElement("label"); mediaLabel.textContent = "Background image, GIF, or video";
-    const mediaInput = document.createElement("input"); mediaInput.type = "file"; mediaInput.className = "text-input";
-    mediaInput.accept = "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm";
-    const mediaHint = document.createElement("p"); mediaHint.className = "muted";
-    mediaHint.textContent = "Image/GIF maks. 20 MB. Video MP4/WebM maks. 50 MB. Video diputar muted dan loop.";
-    mediaInput.addEventListener("change", async () => {
-      const file = mediaInput.files?.[0];
-      mediaInput.value = "";
-      if (!file) return;
-      if (!supabase || !currentUser) return alert("Backend belum siap.");
-      const isVideo = file.type.startsWith("video/");
-      const allowed = ["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "video/webm"];
-      const limit = isVideo ? 50 * 1024 * 1024 : 20 * 1024 * 1024;
-      if (!allowed.includes(file.type) || file.size < 1 || file.size > limit) return alert("Format atau ukuran background tidak didukung.");
-      const extensions = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4", "video/webm": "webm" };
-      const storagePath = `${currentUser.id}/background/${crypto.randomUUID()}.${extensions[file.type]}`;
-      let metadataRecorded = false;
-      try {
-        const { error } = await supabase.storage.from("vio-backgrounds").upload(storagePath, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
-        if (error) throw error;
-        const result = await api("record_background_asset", { storage_path: storagePath, mime_type: file.type, size_bytes: file.size });
-        metadataRecorded = true;
-        if (result.cleanup_pending) alert("Background baru aktif, tetapi file background lama masih menunggu penghapusan Storage. Admin dapat menjalankan retry cleanup.");
-        Object.assign(background, result.background);
-        prefs.background = { ...background };
-        mode.value = background.mode;
-        drawPreview();
-        if (currentRoom) await loadRoomMembers();
-        await broadcastMemberAssetsUpdated();
-        showMessage("loginMessage", "Background berhasil diunggah.", "success");
-      } catch (error) {
-        if (!metadataRecorded) {
-          const { error: cleanupError } = await supabase.storage.from("vio-backgrounds").remove([storagePath]);
-          if (cleanupError) console.warn("Failed to clean up unregistered background upload:", cleanupError);
-        }
-        alert(`Upload background gagal: ${error.message}`);
-      }
-    });
-    mediaField.append(mediaLabel, mediaInput, mediaHint);
-    bgWrap.append(mediaField);
-    const clearBackgroundButton = actionButton("Clear uploaded background", async () => {
-      if (!confirm("Remove the current uploaded background and switch to transparent?")) return;
-      try {
-        const result = await api("clear_background");
-        Object.assign(background, result.background);
-        prefs.background = { ...background };
-        mode.value = "transparent";
-        drawPreview();
-        if (currentRoom) await loadRoomMembers();
-        await broadcastMemberAssetsUpdated();
-        if (result.cleanup_pending) alert("Background sudah dilepas dari profil, tetapi file Storage masih menunggu penghapusan. Admin dapat menjalankan retry cleanup.");
-      } catch (error) {
-        alert(`Gagal menghapus background: ${error.message}`);
-      }
-    });
-    bgWrap.append(clearBackgroundButton);
-    const effectsTitle = document.createElement("h3"); effectsTitle.textContent = "Visual effects";
-    const effectsWrap = document.createElement("div"); effectsWrap.className = "setting-grid";
-    const effectKeys = [
-      ["filter", "Filter warna"], ["stroke", "Stroke"], ["shadow", "Shadow"],
-      ["bloom", "Emission / bloom"], ["distort", "Distorsi"], ["eagle", "Eagle eye"], ["shake", "Bergetar"]
-    ];
-    const effectStates = [["idle", "Idle"], ["talking", "Talking"], ["blink", "Blink"], ["talking_blink", "Talking + Blink"]];
-    const rawEffects = prefs.effects || {};
-    const anyEffectEnabled = effectKeys.some(([key]) => (rawEffects[key] || (key === "bloom" ? rawEffects.glow : null))?.enabled);
-    const effects = {
-      enabled: typeof rawEffects.enabled === "boolean" ? rawEffects.enabled : anyEffectEnabled,
-      stickerEffectsEnabled: rawEffects.stickerEffectsEnabled !== false
-    };
-    for (const [key] of effectKeys) {
-      const legacy = key === "bloom" && !rawEffects.bloom ? rawEffects.glow : rawEffects[key];
-      effects[key] = {
-        enabled: false, intensity: 55, color: key === "shadow" ? "#101010" : "#ffd7b8",
-        thickness: 8, invert: false, states: effectStates.map(([value]) => value),
-        targets: ["avatar", "accessories"], ...(legacy || {})
-      };
-      const savedStates = Array.isArray(effects[key].states)
-        ? effects[key].states.map(state => state === "talkingBlink" ? "talking_blink" : state)
-        : effectStates.map(([value]) => value);
-      effects[key].states = savedStates.includes("all")
-        ? effectStates.map(([value]) => value)
-        : savedStates.filter(state => effectStates.some(([value]) => value === state));
-      const savedTargets = Array.isArray(effects[key].targets) ? effects[key].targets : ["avatar", "accessories"];
-      effects[key].targets = savedTargets.includes("all")
-        ? ["avatar", "accessories"]
-        : savedTargets.filter(target => target === "avatar" || target === "accessories");
-      if (key === "filter") effects[key].filter = { hue: 0, saturation: 100, brightness: 100, contrast: 100, invert: 0, grayscale: 0, sepia: 0, ...(legacy?.filter && typeof legacy.filter === "object" ? legacy.filter : {}) };
-    }
-    const globalField = document.createElement("div"); globalField.className = "setting-field";
-    const globalLabel = document.createElement("label"); globalLabel.textContent = "Aktifkan mesin efek";
-    const globalToggle = document.createElement("input"); globalToggle.type = "checkbox"; globalToggle.checked = !!effects.enabled;
-    globalToggle.addEventListener("change", () => { effects.enabled = globalToggle.checked; prefs.effects = effects; drawPreview(); });
-    globalField.append(globalLabel, globalToggle);
-    const stickerField = document.createElement("label"); stickerField.className = "check-field";
-    const stickerToggle = document.createElement("input"); stickerToggle.type = "checkbox"; stickerToggle.checked = !!effects.stickerEffectsEnabled;
-    stickerToggle.addEventListener("change", () => { effects.stickerEffectsEnabled = stickerToggle.checked; prefs.effects = effects; drawPreview(); });
-    stickerField.append(stickerToggle, document.createTextNode("Izinkan efek pada aksesori"));
-    effectsWrap.append(globalField, stickerField);
-
-    const addEffectRange = (host, labelText, value, min, max, step, onValue) => {
-      const field = document.createElement("label"); field.className = "setting-field";
-      const caption = document.createElement("span"); caption.textContent = `${labelText}: ${value}`;
-      const input = document.createElement("input"); input.type = "range"; input.min = String(min); input.max = String(max); input.step = String(step); input.value = String(value);
-      input.addEventListener("input", () => { const next = Number(input.value); caption.textContent = `${labelText}: ${next}`; onValue(next); prefs.effects = effects; drawPreview(); });
-      field.append(caption, input); host.append(field);
-    };
-    const addEffectCheck = (host, labelText, checked, onValue) => {
-      const field = document.createElement("label"); field.className = "check-field";
-      const input = document.createElement("input"); input.type = "checkbox"; input.checked = !!checked;
-      input.addEventListener("change", () => { onValue(input.checked); prefs.effects = effects; drawPreview(); });
-      field.append(input, document.createTextNode(labelText)); host.append(field);
-    };
-    for (const [key, labelText] of effectKeys) {
-      const effect = effects[key];
-      const details = document.createElement("details");
-      details.className = "setting-field";
-      details.style.cssText = "padding:10px;border:1px solid var(--line);border-radius:12px";
-      const summary = document.createElement("summary"); summary.textContent = labelText; summary.style.cursor = "pointer";
-      details.append(summary);
-      addEffectCheck(details, "Aktif", effect.enabled, value => { effect.enabled = value; });
-      addEffectRange(details, "Intensitas", effect.intensity, 0, 100, 1, value => { effect.intensity = value; });
-      if (["stroke", "shadow", "bloom"].includes(key)) {
-        const colorField = document.createElement("label"); colorField.className = "setting-field";
-        const colorLabel = document.createElement("span"); colorLabel.textContent = "Warna";
-        const color = document.createElement("input"); color.type = "color"; color.value = effect.color || "#ffd7b8";
-        color.addEventListener("input", () => { effect.color = color.value; prefs.effects = effects; drawPreview(); });
-        colorField.append(colorLabel, color); details.append(colorField);
-      }
-      if (key === "stroke") {
-        addEffectRange(details, "Ketebalan", effect.thickness || 8, 1, 24, 1, value => { effect.thickness = value; });
-        addEffectCheck(details, "Mode invert", effect.invert, value => { effect.invert = value; });
-      }
-      if (key === "filter") {
-        for (const [param, title, min, max, step] of [
-          ["hue", "Hue", -180, 180, 1], ["saturation", "Saturation", 0, 200, 1],
-          ["brightness", "Brightness", 0, 200, 1], ["contrast", "Contrast", 0, 200, 1],
-          ["invert", "Invert", 0, 100, 1], ["grayscale", "Grayscale", 0, 100, 1], ["sepia", "Sepia", 0, 100, 1]
-        ]) addEffectRange(details, title, effect.filter[param], min, max, step, value => { effect.filter[param] = value; });
-      }
-      const stateTitle = document.createElement("p"); stateTitle.className = "muted"; stateTitle.textContent = "Ekspresi yang terkena efek";
-      details.append(stateTitle);
-      const stateGrid = document.createElement("div"); stateGrid.className = "setting-grid";
-      for (const [state, title] of effectStates) addEffectCheck(stateGrid, title, effect.states.includes(state), value => {
-        effect.states = value ? [...new Set([...effect.states, state])] : effect.states.filter(item => item !== state);
-      });
-      details.append(stateGrid);
-      const targetTitle = document.createElement("p"); targetTitle.className = "muted"; targetTitle.textContent = "Target efek";
-      details.append(targetTitle);
-      const targetGrid = document.createElement("div"); targetGrid.className = "setting-grid";
-      for (const [target, title] of [["avatar", "Avatar"], ["accessories", "Aksesori"]]) addEffectCheck(targetGrid, title, effect.targets.includes(target), value => {
-        effect.targets = value ? [...new Set([...effect.targets, target])] : effect.targets.filter(item => item !== target);
-      });
-      details.append(targetGrid);
-      effectsWrap.append(details);
-    }
-    const save = actionButton("Save visual settings", async () => {
-      prefs.background = background; prefs.effects = effects;
-      try { await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: prefs }); await broadcastMemberAssetsUpdated(); showMessage("loginMessage","Visual settings saved.","success"); }
-      catch (error) { alert(`Gagal menyimpan efek: ${error.message}`); }
-    }, true);
-    content.append(grid, resolutionTitle, resolutionWrap, backgroundTitle, bgWrap, effectsTitle, effectsWrap, save);
-    return;
-  }
-
-  if (menuId === "obs") {
-    content.append(Object.assign(document.createElement("p"), { className: "muted", textContent: "OBS memakai output renderer terpisah. Browser Source tidak meminta mikrofon; editor perangkat mengolah mic lalu mengirim state ke room/overlay." }));
-    content.append(createOverlayGeneratorButton());
+    renderVisualEffectWorkspace(content);
     return;
   }
 
