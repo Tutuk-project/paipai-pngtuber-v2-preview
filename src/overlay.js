@@ -12,6 +12,8 @@ let localMicUserId = null;
 let localMicActive = false;
 let members = [];
 let refreshTimer = 0;
+let compositeRaf = 0;
+let lastCompositeFrame = 0;
 const states = new Map();
 const stateSequences = new Map();
 const layoutSequences = new Map();
@@ -43,13 +45,22 @@ async function api(action, payload = {}) {
 
 function ensurePlayerRenderer(member, slotWidth) {
   let entry = playerRenderers.get(member.user_id);
+  const drawDirectlyToStage = roomPurpose === "personal_overlay" && member.user_id === localMicUserId;
+  if (entry && entry.direct !== drawDirectlyToStage) {
+    entry.renderer.stop();
+    playerRenderers.delete(member.user_id);
+    entry = null;
+  }
   if (!entry) {
-    const playerCanvas = document.createElement("canvas");
+    // Solo has one participant: draw straight into the visible OBS canvas.
+    // This avoids rendering an animated offscreen canvas that is only copied
+    // when the microphone changes state.
+    const playerCanvas = drawDirectlyToStage ? canvas : document.createElement("canvas");
     playerCanvas.width = Math.max(1, Math.round(slotWidth));
     playerCanvas.height = canvas.height;
     const renderer = new AvatarRenderer(playerCanvas);
     renderer.start();
-    entry = { canvas: playerCanvas, renderer };
+    entry = { canvas: playerCanvas, renderer, direct: drawDirectlyToStage };
     playerRenderers.set(member.user_id, entry);
   }
   const { renderer, canvas: playerCanvas } = entry;
@@ -115,17 +126,43 @@ async function startInvisibleSoloMicrophone() {
   }
 }
 
+function drawCompositeFrame(now) {
+  if (!canvas || !ctx) return;
+  if (now - lastCompositeFrame >= 1000 / 30) {
+    lastCompositeFrame = now;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const visible = members.slice(0, 4);
+    if (visible.length) {
+      const slotWidth = canvas.width / visible.length;
+      visible.forEach((member, index) => {
+        const entry = playerRenderers.get(member.user_id);
+        if (entry && !entry.direct) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
+      });
+    }
+  }
+  compositeRaf = requestAnimationFrame(drawCompositeFrame);
+}
+
 function render() {
   if (!canvas || !ctx) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   const visible = members.slice(0, 4);
-  if (!visible.length) return;
+  if (!visible.length) {
+    if (compositeRaf) cancelAnimationFrame(compositeRaf);
+    compositeRaf = 0;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
   const slotWidth = canvas.width / visible.length;
-  visible.forEach((member, index) => {
+  visible.forEach(member => {
     const entry = playerRenderers.get(member.user_id) || ensurePlayerRenderer(member, slotWidth);
     entry.renderer.setState(states.get(member.user_id) || member.state || "idle");
-    ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
   });
+  if (roomPurpose === "personal_overlay" && visible.length === 1 && visible[0].user_id === localMicUserId) {
+    if (compositeRaf) cancelAnimationFrame(compositeRaf);
+    compositeRaf = 0;
+    return; // AvatarRenderer owns the visible canvas and its animation loop.
+  }
+  if (!compositeRaf) compositeRaf = requestAnimationFrame(drawCompositeFrame);
 }
 
 async function refreshMembers() {
@@ -272,6 +309,8 @@ boot();
 
 window.addEventListener("pagehide", () => {
   if (refreshTimer) clearInterval(refreshTimer);
+  if (compositeRaf) cancelAnimationFrame(compositeRaf);
+  compositeRaf = 0;
   for (const entry of playerRenderers.values()) entry.renderer.stop();
   void localMicEngine?.stop().catch(() => {});
   localMicEngine = null;
