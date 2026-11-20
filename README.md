@@ -110,3 +110,8 @@ A modular `src/avatar-renderer.js` is wired into the v2 editor and OBS overlay. 
 ## Latest development audit
 
 - Checkpoint 44: [Character upload incident and impact audit](docs/CHECKPOINT-44-2026-11-21.md)
+
+
+## Latest development audit
+
+- Checkpoint 45: [Profile, room layout and Solo mic integration audit](docs/CHECKPOINT-45-2026-11-21.md)
