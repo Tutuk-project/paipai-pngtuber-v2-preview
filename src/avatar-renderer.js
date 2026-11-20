@@ -273,7 +273,14 @@ export class AvatarRenderer {
     const expression = this.state === "talking"
       ? (blinking ? "talking_blink" : "talking")
       : (blinking ? "blink" : "idle");
-    const image = this.image(this.assets[expression] || this.assets[this.state] || this.assets.idle || this.assets.talking);
+    const candidates = [...new Set([
+      this.assets[expression], this.assets[this.state], this.assets.idle,
+      this.assets.talking, this.assets.blink, this.assets.talking_blink
+    ].filter(Boolean))].map(src => this.image(src)).filter(Boolean);
+    // Prefer a decoded expression asset, but keep the avatar visible with any
+    // decoded fallback while a state-specific image is loading or unavailable.
+    const image = candidates.find(item => item.complete && item.naturalWidth)
+      || candidates.find(item => !item.complete);
     if (image?.complete && image.naturalWidth) this.drawAvatar(ctx, image, W, H, now, expression);
     this.drawAccessories(ctx, W, H, now, expression);
   }
