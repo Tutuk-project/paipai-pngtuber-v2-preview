@@ -1454,6 +1454,19 @@ function bindAccessoryCanvasDrag(canvas) {
 }
 
 function openRoomChooser() {
+  const side = $("sidebar");
+  side?.classList.add("is-collapsed");
+  const sideButton = $("sidebarToggle");
+  if (sideButton) { sideButton.textContent = "›"; sideButton.title = "Expand sidebar"; }
+  activeMenu = "collaboration";
+  renderNavigation();
+  if (currentRoom) {
+    $("app").classList.add("in-room");
+    showView("collaborationView");
+    $("pageTitle").textContent = "GO Collaboration";
+    $("roomCodeLabel").textContent = currentRoom.room_code || "----";
+    return;
+  }
   const dialog = $("roomDialog");
   $("roomDialogTitle").textContent = "GO Collaboration";
   const body = $("roomDialogBody");
@@ -1500,6 +1513,8 @@ async function enterRoom(room) {
   currentRoom = room;
   profilePreferences.lastRoomId = room.id;
   api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: profilePreferences }).catch(error => console.warn("Room restore pointer could not be saved:", error.message));
+  $("sidebar")?.classList.add("is-collapsed");
+  if ($("sidebarToggle")) { $("sidebarToggle").textContent = "›"; $("sidebarToggle").title = "Expand sidebar"; }
   $("app").classList.add("in-room");
   showView("collaborationView");
   $("pageTitle").textContent = "GO Collaboration";
@@ -1973,6 +1988,9 @@ function setupEvents() {
   $("topRoomButton").addEventListener("click", openRoomChooser);
   $("exitRoom").addEventListener("click", () => leaveRoom(true));
   $("copyRoomCode").addEventListener("click", async () => { if (currentRoom) await navigator.clipboard.writeText(currentRoom.room_code); });
+  $("avatarScaleDecrease").addEventListener("click", () => changeAvatarScale(-5));
+  $("avatarScaleIncrease").addEventListener("click", () => changeAvatarScale(5));
+  updateAvatarScaleWidget();
   $("obsLinkButton").addEventListener("click", () => generateOverlayLink($("obsLinkButton")));
   $("roomObsLink").addEventListener("click", () => generateOverlayLink($("roomObsLink")));
   $("micToggleButton").addEventListener("click", () => micEnabled ? stopMicrophone() : startMicrophone());
