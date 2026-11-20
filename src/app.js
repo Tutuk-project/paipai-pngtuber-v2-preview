@@ -1693,6 +1693,7 @@ function renderRoomParticipants() {
     const preferences = {
       ...(member.preferences || {}),
       scale: overrides.scale ?? member.preferences?.scale ?? 1,
+      avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent,
       offsetX: Math.max(-100, Math.min(100, Number(overrides.x) || 0)) * width * 0.004,
       offsetY: Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * height * 0.0035
     };
