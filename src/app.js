@@ -923,11 +923,8 @@ async function login(username, pairingCode) {
   await startMicrophone({ silent: true });
   await loadCurrentProfile();
   try {
-    const assets = await api("my_assets");
-    assetUrls = { ...assetUrls, ...(assets.assets || {}) };
-    characterAccessories = assets.accessories || [];
-    if (assets.background) profilePreferences.background = assets.background;
-    drawPreview();
+    await refreshCharacterLibrary();
+    await loadActiveCharacterAssets();
   } catch (assetError) { console.info("No saved character assets yet:", assetError.message); }
   $("footerSession").textContent = `Session: ${currentUser.username} · ${currentUser.role}`;
   $("loginGate").hidden = true;
@@ -940,7 +937,8 @@ async function loadCurrentProfile() {
   try {
     const result = await api("profile_get");
     currentUser = { ...currentUser, ...result.account };
-    profilePreferences = { scale: 1, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "", ...(result.profile?.preferences || {}) };
+    profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "", ...(result.profile?.preferences || {}) };
+    avatarScalePercent = Math.max(-100, Math.min(100, Math.round(Number(profilePreferences.avatarScalePercent) || 0)));
     roomOverrides = { scale: profilePreferences.scale, x: 0, y: 0, sensitivity: profilePreferences.sensitivity, boostDb: profilePreferences.boostDb, deviceId: profilePreferences.deviceId || "" };
     if (audio) audio.setOptions({ sensitivity: roomOverrides.sensitivity, boostDb: roomOverrides.boostDb, deviceId: roomOverrides.deviceId });
   } catch (error) {
@@ -1269,24 +1267,30 @@ async function saveAccessorySettings(item) {
 
 async function uploadCharacterAsset(state, file) {
   if (!file) return;
-  if (!supabase || !currentUser) return alert("Backend belum siap.");
-  if (!/^image\/(png|webp)$/.test(file.type)) return alert("Gunakan PNG atau WebP.");
-  if (file.size > 8 * 1024 * 1024) return alert("Ukuran maksimal file 8 MB.");
+  if (!supabase || !currentUser) return showAppToast("Backend belum siap.", "error");
+  if (!/^image\/(png|webp)$/.test(file.type)) return showAppToast("Gunakan PNG atau WebP.", "error");
+  if (file.size < 1 || file.size > 8 * 1024 * 1024) return showAppToast("Ukuran maksimal file 8 MB.", "error");
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const authId = userData.user?.id;
-    const storagePath = `${currentUser.id}/characters/default/${state}.${file.type === "image/webp" ? "webp" : "png"}`;
+    if (!activeCharacterId) await refreshCharacterLibrary();
+    if (!activeCharacterId) {
+      const created = await api("create_character_draft");
+      activeCharacterId = created.character.id;
+    }
+    const ext = file.type === "image/webp" ? "webp" : "png";
+    const storagePath = `${currentUser.id}/characters/${activeCharacterId}/${state}.${ext}`;
     const { error: uploadError } = await supabase.storage.from("vio-studio-assets").upload(storagePath, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
     if (uploadError) throw uploadError;
     const { data: signed, error: signedError } = await supabase.storage.from("vio-studio-assets").createSignedUrl(storagePath, 3600);
     if (signedError) throw signedError;
+    await api("record_asset", { character_id: activeCharacterId, storage_path: storagePath, expression: state, mime_type: file.type, size_bytes: file.size });
     assetUrls[state] = signed.signedUrl;
-    showMessage("loginMessage", `${state} asset berhasil diunggah.`, "success");
     drawPreview();
-    await api("record_asset", { storage_path: storagePath, expression: state, mime_type: file.type, size_bytes: file.size });
+    renderAccessoryQuickScales();
+    if (currentRoom) await loadRoomMembers();
     await broadcastMemberAssetsUpdated();
+    showAppToast(`${state.replace("_"," ").toUpperCase()} berhasil diunggah`);
   } catch (error) {
-    alert(`Upload gagal: ${error.message}`);
+    showAppToast(`Upload gagal: ${error.message}`, "error");
   }
 }
 
