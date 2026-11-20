@@ -125,6 +125,8 @@ export class AvatarRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d", { alpha: true });
+    this.renderCanvas = document.createElement("canvas");
+    this.renderCtx = this.renderCanvas.getContext("2d", { alpha: true });
     this.assets = {};
     this.images = new Map();
     this.effectCache = new WeakMap();
@@ -260,8 +262,19 @@ export class AvatarRenderer {
   }
 
   render(now) {
-    const { canvas, ctx } = this;
-    const W = canvas.width, H = canvas.height;
+    const { canvas } = this;
+    const outputWidth = canvas.width, outputHeight = canvas.height;
+    // Render on a bounded internal surface on mobile, then publish only a
+    // complete frame. A slow effect/image decode can no longer clear OBS output.
+    const renderScale = Math.min(1, 1280 / Math.max(outputWidth, outputHeight));
+    const W = Math.max(1, Math.round(outputWidth * renderScale));
+    const H = Math.max(1, Math.round(outputHeight * renderScale));
+    if (this.renderCanvas.width !== W || this.renderCanvas.height !== H) {
+      this.renderCanvas.width = W;
+      this.renderCanvas.height = H;
+      this.renderCtx = this.renderCanvas.getContext("2d", { alpha: true });
+    }
+    const ctx = this.renderCtx;
     ctx.clearRect(0, 0, W, H);
     this.drawBackground(ctx, W, H);
     if (!this.nextBlinkAt) this.nextBlinkAt = now + this.blinkDelay();
@@ -281,8 +294,15 @@ export class AvatarRenderer {
     // decoded fallback while a state-specific image is loading or unavailable.
     const image = candidates.find(item => item.complete && item.naturalWidth)
       || candidates.find(item => !item.complete);
-    if (image?.complete && image.naturalWidth) this.drawAvatar(ctx, image, W, H, now, expression);
+    const hasAvatar = Boolean(image?.complete && image.naturalWidth);
+    if (hasAvatar) this.drawAvatar(ctx, image, W, H, now, expression);
     this.drawAccessories(ctx, W, H, now, expression);
+    const hasOpaqueBackground = this.preferences.background?.mode && this.preferences.background.mode !== "transparent";
+    if (hasAvatar || this.accessories.some(item => item.image?.complete && item.image.naturalWidth) || hasOpaqueBackground) {
+      const output = canvas.getContext("2d", { alpha: true });
+      output.clearRect(0, 0, outputWidth, outputHeight);
+      output.drawImage(this.renderCanvas, 0, 0, outputWidth, outputHeight);
+    }
   }
 
   blinkDelay() {
@@ -467,7 +487,7 @@ export class AvatarRenderer {
     const sourceHeight = sprite.height + pad * 2;
     if (ids.includes("distort") && target === "avatar") {
       const strength = Math.max(0, Math.min(1, Number(this.preferences.effects.distort.intensity) / 100 || 0.2));
-      const rows = 48;
+      const rows = Math.max(12, Math.min(20, Math.round(sourceHeight / 80)));
       for (let row = 0; row < rows; row++) {
         const sourceY = row * sourceHeight / rows;
         const sliceHeight = sourceHeight / rows + 1;
