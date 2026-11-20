@@ -316,3 +316,38 @@
   .room-control-group{padding:13px}
   .room-controls-note{grid-column:auto}
 }
+
+/* Hard fix: collaboration layout is constrained to the viewport on phones. */
+.app-shell.in-room #collaborationView{min-width:0;width:100%;gap:14px}
+.app-shell.in-room .room-toolbar{min-width:0;width:100%;display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:14px;padding:16px}
+.app-shell.in-room .room-toolbar>div:first-child{min-width:0}
+.app-shell.in-room .room-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;min-width:0}
+.app-shell.in-room .room-actions>*{min-width:0;width:100%;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.app-shell.in-room .collab-stage-wrap{display:grid;justify-items:center;gap:10px;padding:12px;min-width:0;overflow:hidden}
+.app-shell.in-room .collab-stage-wrap>canvas{width:auto!important;height:min(42vh,360px)!important;max-height:360px!important;max-width:100%!important;aspect-ratio:9/16!important;object-fit:contain}
+.app-shell.in-room .participant-names{width:100%;min-width:0}
+.app-shell.in-room .participant-names[hidden]{display:none!important}
+.app-shell.in-room .settings-panel{min-width:0}
+.app-shell.in-room .settings-panel .settings-content{padding:14px}
+.room-controls-layout{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.room-control-group{min-width:0;padding:14px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#ffffff08,#ffffff02);display:grid;align-content:start;gap:14px}
+.room-control-heading{display:grid;gap:5px}
+.room-control-heading h3{margin:0;font-size:13px;color:var(--text)}
+.room-control-heading p{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
+.room-control-fields{display:grid;gap:13px;min-width:0}
+.room-control-field{display:grid;gap:8px;min-width:0}
+.room-control-label-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.room-control-label-row label,.room-control-field>label{font-size:11px;color:var(--muted)}
+.room-control-value{font-size:11px;font-weight:800;color:var(--mint);font-variant-numeric:tabular-nums}
+.room-control-field .range-input{width:100%;min-width:0}
+.room-device-field .select-input{width:100%;min-width:0}
+.room-reset-button{width:100%}
+.room-controls-note{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
+.stage-notice{max-width:min(90%,440px)}
+@media(max-width:620px){
+ .app-shell.in-room .room-toolbar{padding:14px}
+ .app-shell.in-room .room-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .app-shell.in-room .collab-stage-wrap{padding:10px}
+ .app-shell.in-room .collab-stage-wrap>canvas{height:min(40vh,320px)!important;max-height:320px!important}
+ .room-controls-layout{grid-template-columns:minmax(0,1fr)}
+}
