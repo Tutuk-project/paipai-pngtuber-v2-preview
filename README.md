@@ -125,3 +125,7 @@ A modular `src/avatar-renderer.js` is wired into the v2 editor and OBS overlay. 
 ## Latest development audit
 
 - Checkpoint 47: [Solo OBS animation, avatar fallback and preview performance](docs/CHECKPOINT-47-2026-11-21.md)
+
+
+## Latest development checkpoint
+- [Checkpoint 48 — Solo OBS render stability, Collaboration landscape, and composition grid](docs/CHECKPOINT-48-2026-11-21.md)
