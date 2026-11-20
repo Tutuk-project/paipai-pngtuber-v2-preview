@@ -41,7 +41,11 @@ function ensurePlayerRenderer(member, slotWidth) {
   renderer.setAssets(member.assets || {});
   renderer.setAccessories(member.accessories || []);
   const overrides = member.overrides || {};
-  const preferences = { ...(member.preferences || {}), scale: overrides.scale ?? member.preferences?.scale ?? 1 };
+  const preferences = {
+    ...(member.preferences || {}),
+    scale: overrides.scale ?? member.preferences?.scale ?? 1,
+    avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent
+  };
   preferences.offsetX = Math.max(-100, Math.min(100, Number(overrides.x) || 0)) * width * 0.004;
   preferences.offsetY = Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * canvas.height * 0.0035;
   renderer.setPreferences(preferences);
