@@ -34,6 +34,7 @@ let avatarScalePercent = 0;
 let profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "" };
 let roomOverrides = { scale: 1, x: 0, y: 0, sensitivity: 1, boostDb: 6, deviceId: "" };
 let renderFrame = 0;
+let lastRoomStageFrame = 0;
 let playerSequence = 0;
 let layoutSequence = 0;
 let activeSupportSession = null;
@@ -1901,18 +1902,23 @@ function renderRoomParticipants() {
   if (!renderFrame) renderFrame = requestAnimationFrame(drawRoomStageFrame);
 }
 
-function drawRoomStageFrame() {
+function drawRoomStageFrame(now = performance.now()) {
   renderFrame = 0;
   if (!currentRoom) return;
-  const canvas = $("roomStage");
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const visible = roomMembers.slice(0, 4);
-  const slotWidth = canvas.width / Math.max(1, visible.length);
-  visible.forEach((member, index) => {
-    const entry = roomPreviewRenderers.get(member.user_id);
-    if (entry?.canvas) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
-  });
+  // Player renderers already animate independently. Composite the shared
+  // preview at 30 fps instead of repainting a 1920x1080 canvas every display frame.
+  if (now - lastRoomStageFrame >= 1000 / 30) {
+    lastRoomStageFrame = now;
+    const canvas = $("roomStage");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const visible = roomMembers.slice(0, 4);
+    const slotWidth = canvas.width / Math.max(1, visible.length);
+    visible.forEach((member, index) => {
+      const entry = roomPreviewRenderers.get(member.user_id);
+      if (entry?.canvas) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
+    });
+  }
   renderFrame = requestAnimationFrame(drawRoomStageFrame);
 }
 
