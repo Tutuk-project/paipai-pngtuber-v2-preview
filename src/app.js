@@ -269,7 +269,7 @@ function openCharacterDeleteDialog() {
     remove.className = "icon-button delete-icon-button";
     remove.setAttribute("aria-label", `Hapus ${character.name}`);
     remove.title = `Hapus ${character.name}`;
-    remove.textContent = "▣";
+    remove.textContent = "🗑";
     remove.addEventListener("click", async () => {
       remove.disabled = true;
       try {
