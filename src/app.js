@@ -1147,32 +1147,34 @@ async function stopMicrophone() {
 
 async function uploadCharacterAccessories(files) {
   if (!files?.length || !supabase || !currentUser) return;
+  if (!activeCharacterId) await refreshCharacterLibrary();
+  if (!activeCharacterId) throw new Error("Pilih atau buat avatar terlebih dahulu.");
   for (const file of [...files]) {
     if (!/^image\/(png|webp)$/.test(file.type) || file.size < 1 || file.size > 8 * 1024 * 1024) {
-      alert(`Aksesori ${file.name} dilewati. Gunakan PNG/WebP maksimal 8 MB.`);
+      showAppToast(`Aksesori ${file.name} dilewati. Gunakan PNG/WebP maksimal 8 MB.`, "error");
       continue;
     }
     let storagePath = "";
-    let metadataRecorded = false;
+    let recorded = false;
     try {
-      const extension = file.type === "image/webp" ? "webp" : "png";
-      storagePath = `${currentUser.id}/characters/default/accessories/${crypto.randomUUID()}.${extension}`;
+      const ext = file.type === "image/webp" ? "webp" : "png";
+      storagePath = `${currentUser.id}/characters/${activeCharacterId}/accessories/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from("vio-studio-assets").upload(storagePath, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
       if (error) throw error;
-      await api("record_accessory", { storage_path: storagePath, name: file.name, mime_type: file.type, size_bytes: file.size });
-      metadataRecorded = true;
+      const index = characterAccessories.length + 1;
+      await api("record_accessory", { character_id: activeCharacterId, storage_path: storagePath, name: `Aksesori ${index}`, mime_type: file.type, size_bytes: file.size });
+      recorded = true;
     } catch (error) {
-      if (storagePath && !metadataRecorded) {
+      if (storagePath && !recorded) {
         const { error: cleanupError } = await supabase.storage.from("vio-studio-assets").remove([storagePath]);
-        if (cleanupError) console.warn("Failed to clean up unrecorded accessory upload:", cleanupError);
+        if (cleanupError) console.warn("Failed accessory upload cleanup:", cleanupError);
       }
-      alert(`Upload aksesori ${file.name} gagal: ${error.message}`);
+      showAppToast(`Upload aksesori ${file.name} gagal: ${error.message}`, "error");
     }
   }
-  const result = await api("my_assets");
-  characterAccessories = result.accessories || [];
-  drawPreview();
+  await loadActiveCharacterAssets();
   renderAccessorySettingsList();
+  renderAccessoryQuickScales();
   if (currentRoom) await loadRoomMembers();
   await broadcastMemberAssetsUpdated();
 }
@@ -1183,77 +1185,75 @@ function renderAccessorySettingsList() {
   host.replaceChildren();
   if (!characterAccessories.length) {
     const empty = document.createElement("p");
-    empty.className = "muted";
+    empty.className = "muted accessory-empty";
     empty.textContent = "Belum ada aksesori.";
     host.append(empty);
     return;
   }
-  for (const item of characterAccessories) {
-    const card = document.createElement("div");
-    card.className = "setting-field";
+  characterAccessories.forEach((item, index) => {
+    const card = document.createElement("article");
+    card.className = `accessory-library-card ${selectedAccessoryId === item.id ? "is-selected" : ""}`;
     card.dataset.accessoryId = item.id;
-    card.style.cssText = "padding:10px;border:1px solid var(--line);border-radius:12px;cursor:pointer";
-    card.style.outline = selectedAccessoryId === item.id ? "2px solid var(--mint)" : "none";
-    card.addEventListener("click", event => {
-      if (event.target.closest("button,input")) return;
-      selectedAccessoryId = item.id;
-      for (const sibling of host.children) sibling.style.outline = sibling.dataset.accessoryId === item.id ? "2px solid var(--mint)" : "none";
-    });
-    const heading = document.createElement("strong");
-    heading.textContent = item.name || "Accessory";
-    const preview = document.createElement("img");
-    preview.src = item.src;
-    preview.alt = item.name || "Accessory";
-    preview.style.cssText = "width:100%;height:96px;object-fit:contain;background:rgba(0,0,0,.12);border-radius:8px";
-    card.append(heading, preview);
-    const addRange = (labelText, key, min, max, step) => {
-      const wrap = document.createElement("label");
-      wrap.className = "setting-field";
-      const label = document.createElement("span");
-      label.textContent = labelText;
-      const input = document.createElement("input");
-      input.type = "range"; input.min = String(min); input.max = String(max); input.step = String(step);
-      input.value = String(item[key] ?? (key === "x" || key === "y" ? 0.5 : 0.18));
-      input.addEventListener("input", () => {
-        const value = Number(input.value);
-        if (key === "w") {
-          const ratio = Number(item.h || 0.18) / Math.max(0.01, Number(item.w || 0.18));
-          item.w = value; item.h = Math.min(2, Math.max(0.01, value * ratio));
-        } else item[key] = value;
-        drawPreview();
-      });
-      input.addEventListener("change", () => saveAccessorySettings(item));
-      wrap.append(label, input); card.append(wrap);
-    };
-    addRange("Posisi horizontal", "x", 0, 1, 0.01);
-    addRange("Posisi vertikal", "y", 0, 1, 0.01);
-    addRange("Ukuran", "w", 0.04, 0.8, 0.01);
-    const addCheck = (labelText, key, defaultValue) => {
-      const label = document.createElement("label");
-      label.className = "check-row";
-      const input = document.createElement("input");
-      input.type = "checkbox"; input.checked = item[key] ?? defaultValue;
-      input.addEventListener("change", () => { item[key] = input.checked; drawPreview(); saveAccessorySettings(item); });
-      label.append(input, document.createTextNode(labelText)); card.append(label);
-    };
-    addCheck("Ikuti gerakan avatar", "follow", true);
-    addCheck("Mirror bersama avatar", "mirror", false);
-    addCheck("Aktifkan efek visual", "effectsEnabled", true);
-    const remove = actionButton("Hapus aksesori", async () => {
-      if (!confirm(`Hapus aksesori "${item.name}"?`)) return;
+    const image = document.createElement("img");
+    image.src = item.src;
+    image.alt = item.name || `Aksesori ${index + 1}`;
+    const meta = document.createElement("div");
+    meta.className = "accessory-library-meta";
+    const name = document.createElement("strong");
+    name.textContent = item.name || `Aksesori ${index + 1}`;
+    const hint = document.createElement("small");
+    hint.textContent = "Geser langsung di jendela preview";
+    meta.append(name, hint);
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "icon-button delete-icon-button";
+    remove.textContent = "×"; remove.title = "Hapus aksesori";
+    remove.addEventListener("click", async event => {
+      event.stopPropagation(); remove.disabled = true;
       try {
         const deletion = await api("delete_accessory", { accessory_id: item.id });
-        if (deletion.cleanup_pending) alert("Aksesori dihapus dari profil, tetapi penghapusan file Storage masih tertunda. Admin dapat menjalankan retry cleanup.");
-        characterAccessories = characterAccessories.filter(x => x.id !== item.id);
+        characterAccessories = characterAccessories.filter(entry => entry.id !== item.id);
         if (selectedAccessoryId === item.id) selectedAccessoryId = null;
-        drawPreview(); renderAccessorySettingsList();
+        drawPreview(); renderAccessorySettingsList(); renderAccessoryQuickScales();
+        if (deletion.cleanup_pending) showAppToast("File aksesori masih menunggu penghapusan Storage.", "error");
         if (currentRoom) await loadRoomMembers();
         await broadcastMemberAssetsUpdated();
-      } catch (error) { alert(`Gagal menghapus aksesori: ${error.message}`); }
+      } catch (error) {
+        remove.disabled = false;
+        showAppToast(`Gagal menghapus aksesori: ${error.message}`, "error");
+      }
     });
-    card.append(remove);
+    card.addEventListener("click", () => { selectedAccessoryId = item.id; renderAccessorySettingsList(); });
+    card.append(image, meta, remove);
     host.append(card);
-  }
+  });
+}
+
+function renderAccessoryQuickScales() {
+  const host = $("accessoryScaleControls");
+  if (!host) return;
+  host.replaceChildren();
+  host.hidden = !characterAccessories.length;
+  characterAccessories.forEach((item, index) => {
+    const row = document.createElement("div"); row.className = "accessory-quick-scale";
+    const label = document.createElement("span"); label.textContent = `Aksesori ${index + 1}`;
+    const controls = document.createElement("div"); controls.className = "stepper-control";
+    const value = document.createElement("strong");
+    const read = () => Math.round((Number(item.w || .18) / .18) * 100);
+    value.textContent = `${read()}%`;
+    const update = async delta => {
+      const oldW = Number(item.w || .18), oldH = Number(item.h || .18);
+      const ratio = oldH / Math.max(.01, oldW);
+      const nextW = Math.max(.04, Math.min(.8, oldW + delta * .009));
+      item.w = nextW; item.h = Math.max(.01, Math.min(2, nextW * ratio));
+      value.textContent = `${read()}%`;
+      drawPreview(); await saveAccessorySettings(item);
+    };
+    const minus = document.createElement("button"); minus.type = "button"; minus.className = "stepper-button"; minus.textContent = "−";
+    minus.addEventListener("click", () => update(-1));
+    const plus = document.createElement("button"); plus.type = "button"; plus.className = "stepper-button"; plus.textContent = "+";
+    plus.addEventListener("click", () => update(1));
+    controls.append(minus, value, plus); row.append(label, controls); host.append(row);
+  });
 }
 
 async function saveAccessorySettings(item) {
