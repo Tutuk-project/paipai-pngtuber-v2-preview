@@ -31,7 +31,7 @@ let activeCharacterId = null;
 let activeMakeupEffect = null;
 let characterDeleteDialog = null;
 let avatarScalePercent = 0;
-let profilePreferences = { scale: 1, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "" };
+let profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "" };
 let roomOverrides = { scale: 1, x: 0, y: 0, sensitivity: 1, boostDb: 6, deviceId: "" };
 let renderFrame = 0;
 let playerSequence = 0;
@@ -1333,6 +1333,7 @@ function drawPreview() {
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   const stageFrame = canvas.closest(".stage-frame");
   if (stageFrame) stageFrame.style.aspectRatio = "4 / 3";
+  updateAvatarScaleWidget();
   const roomStage = $("roomStage");
   if (roomStage && (roomStage.width !== width || roomStage.height !== height)) {
     roomStage.width = width; roomStage.height = height; roomStage.style.aspectRatio = `${width} / ${height}`;
