@@ -106,3 +106,7 @@ A modular `src/avatar-renderer.js` is wired into the v2 editor and OBS overlay. 
 - Checkpoint 35 verified run: `44748939403`, 58 tests passed, 0 failed, 0 skipped; PostgreSQL 16 concurrency suite passed 4/4 scenarios.
 - Coverage includes security policy checks, expired-room Realtime checks, Admin bootstrap, accessory lifecycle/transforms/direct drag, collaboration animation, private background media validation/signed delivery, portrait/custom output dimensions, host-selected room resolution, mobile pixel-budget validation, and live asset-update broadcast wiring.
 - Migrations 001–008 and Edge Function `vio-api` v1 are deployed to the isolated Supabase Development project `vio-studio-v2-dev` (`nbpqnwjxavuhpiuntcep`). JWT verification is enabled. Supabase Live remains untouched.
+
+## Latest development audit
+
+- Checkpoint 44: [Character upload incident and impact audit](docs/CHECKPOINT-44-2026-11-21.md)
