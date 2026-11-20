@@ -172,7 +172,9 @@ Deno.serve(async (req) => {
       if (!authUser.is_anonymous) return json({ ok: false, error: "Bootstrap only accepts a fresh anonymous device session." }, 403);
       const username = String(body.username || "").trim().toLowerCase();
       const supplied = String(body.bootstrap_token || "");
-      const expected = Deno.env.get("VIO_ADMIN_BOOTSTRAP_TOKEN") || "";
+      // Dashboard copy/paste can accidentally retain surrounding whitespace.
+      // Normalize only outer whitespace; the token itself remains case-sensitive.
+      const expected = (Deno.env.get("VIO_ADMIN_BOOTSTRAP_TOKEN") || "").trim();
       if (username !== "paipai77") return json({ ok: false, code: "BOOTSTRAP_USERNAME_INVALID", error: "Username bootstrap tidak valid. Gunakan akun Admin awal yang telah ditentukan." }, 400);
       if (!expected || expected.length < 32) return json({ ok: false, code: "BOOTSTRAP_SECRET_MISSING", error: "Secret bootstrap belum dikonfigurasi dengan benar pada Supabase Development Edge Function. Atur ulang VIO_ADMIN_BOOTSTRAP_TOKEN." }, 503);
       const suppliedBytes = new TextEncoder().encode(supplied);
@@ -183,7 +185,12 @@ Deno.serve(async (req) => {
         for (let i = 0; i < expectedBytes.length; i++) diff |= suppliedBytes[i] ^ expectedBytes[i];
         tokenMatches = diff === 0;
       }
-      if (suppliedBytes.length < 32 || !tokenMatches) return json({ ok: false, code: "BOOTSTRAP_TOKEN_INVALID", error: "Token bootstrap tidak cocok dengan secret di Supabase Development. Buat token baru dan masukkan kembali." }, 403);
+      if (suppliedBytes.length < 32 || !tokenMatches) return json({
+        ok: false,
+        code: "BOOTSTRAP_TOKEN_INVALID",
+        error: "Token bootstrap tidak cocok dengan secret di Supabase Development. Pastikan token dimasukkan tanpa tanda kutip, spasi, atau baris baru.",
+        diagnostics: { supplied_length: suppliedBytes.length, configured_length: expectedBytes.length, outer_whitespace_normalized: true }
+      }, 403);
       const { data, error } = await db.rpc("vio_bootstrap_admin", { p_auth_uid: authUser.id, p_username: username });
       if (error) throw error;
       await audit(db, data.id, data.id, "bootstrap_admin", { username });
