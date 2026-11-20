@@ -7,7 +7,6 @@ let roomId;
 let overlayToken;
 let members = [];
 let refreshTimer = 0;
-let compositeFrame = 0;
 const states = new Map();
 const stateSequences = new Map();
 const layoutSequences = new Map();
@@ -85,11 +84,6 @@ function render() {
   });
 }
 
-function compositeLoop() {
-  render();
-  compositeFrame = requestAnimationFrame(compositeLoop);
-}
-
 async function refreshMembers() {
   const result = await api("overlay_connect", { room_id: roomId, overlay_token: overlayToken });
   members = result.members || [];
@@ -157,7 +151,6 @@ async function boot() {
 
     setStatus("Memuat peserta dan aset avatar…");
     await refreshMembers();
-    if (!compositeFrame) compositeFrame = requestAnimationFrame(compositeLoop);
     channel = supabase.channel(`room:${roomId}`, { config: { private: true } })
       .on("broadcast", { event: "player-state" }, ({ payload }) => {
         if (!payload?.user_id || !["idle", "talking"].includes(payload.state)) return;
@@ -200,7 +193,17 @@ async function boot() {
     }, 15000);
   } catch (error) {
     console.error("Vio Studio OBS overlay error:", error);
-    setStatus(`OBS OVERLAY ERROR: ${error.message}`, true);
+    let message = error instanceof Error ? error.message : String(error);
+    const context = error && typeof error === "object" ? error.context : null;
+    if (context instanceof Response) {
+      try {
+        const body = await context.clone().json();
+        if (body?.error) message = String(body.error);
+        if (body?.code) message = `[${body.code}] ${message}`;
+        if (body?.details) message += ` · ${body.details}`;
+      } catch { /* Keep the SDK message if the response is not JSON. */ }
+    }
+    setStatus(`OBS OVERLAY ERROR: ${message}`, true);
   }
 }
 
@@ -208,7 +211,5 @@ boot();
 
 window.addEventListener("pagehide", () => {
   if (refreshTimer) clearInterval(refreshTimer);
-  if (compositeFrame) cancelAnimationFrame(compositeFrame);
-  compositeFrame = 0;
   for (const entry of playerRenderers.values()) entry.renderer.stop();
 });
