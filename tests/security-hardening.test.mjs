@@ -234,4 +234,5 @@ test("editor preview uses bounded backing resolution without changing saved stre
   assert.match(preview, /720 \/ Math\.max\(width, height\)/);
   assert.match(preview, /profilePreferences\.outputWidth/);
   assert.match(preview, /profilePreferences\.outputHeight/);
+  assert.match(app, /now - lastRoomStageFrame >= 1000 \/ 30/);
 });
