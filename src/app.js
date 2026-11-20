@@ -1033,6 +1033,33 @@ function updateMicToggleButtons() {
   }
 }
 
+function updateAvatarScaleWidget() {
+  const value = $("avatarScaleValue");
+  if (value) value.textContent = `${avatarScalePercent}%`;
+  const minus = $("avatarScaleDecrease"), plus = $("avatarScaleIncrease");
+  if (minus) minus.disabled = avatarScalePercent <= -100;
+  if (plus) plus.disabled = avatarScalePercent >= 100;
+}
+
+let avatarScaleSaveTimer = 0;
+function changeAvatarScale(delta) {
+  avatarScalePercent = Math.max(-100, Math.min(100, avatarScalePercent + delta));
+  profilePreferences.avatarScalePercent = avatarScalePercent;
+  profilePreferences.scale = Math.max(.1, 1 + avatarScalePercent / 100);
+  updateAvatarScaleWidget();
+  drawPreview();
+  clearTimeout(avatarScaleSaveTimer);
+  avatarScaleSaveTimer = setTimeout(async () => {
+    if (!currentUser) return;
+    try {
+      await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: profilePreferences });
+      if (currentRoom) await broadcastMemberAssetsUpdated();
+    } catch (error) {
+      showAppToast(`Skala avatar gagal disimpan: ${error.message}`, "error");
+    }
+  }, 320);
+}
+
 function showToast(message, type = "success") {
   let toast = $("appToast");
   if (!toast) {
