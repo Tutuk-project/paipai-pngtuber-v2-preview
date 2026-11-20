@@ -885,12 +885,18 @@ Deno.serve(async (req) => {
 
     if (action === "create_character_draft") {
       const user = requireUser();
-      const { data: draft, error } = await db.from("vio_characters").insert({ user_id: user.id, name: "Draft", is_saved: false }).select("id,name,is_saved,created_at").single();
-      if (error) throw error;
+      const { data: existingDraft, error: existingError } = await db.from("vio_characters").select("id,name,is_saved,created_at").eq("user_id", user.id).eq("is_saved", false).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (existingError) throw existingError;
+      let draft = existingDraft;
+      if (!draft) {
+        const { data, error } = await db.from("vio_characters").insert({ user_id: user.id, name: "Draft", is_saved: false }).select("id,name,is_saved,created_at").single();
+        if (error) throw error;
+        draft = data;
+      }
       const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: draft.id, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
       if (profileError) throw profileError;
-      await audit(db, user.id, user.id, "character_draft_created", { character_id: draft.id });
-      return json({ ok: true, character: draft });
+      await audit(db, user.id, user.id, "character_draft_created", { character_id: draft.id, reused: !!existingDraft });
+      return json({ ok: true, character: draft, reused: !!existingDraft });
     }
 
     if (action === "set_active_character") {
@@ -915,7 +921,7 @@ Deno.serve(async (req) => {
       const { data: savedCharacters, error: countError } = await db.from("vio_characters").select("name").eq("user_id", user.id).eq("is_saved", true);
       if (countError) throw countError;
       const nextNumber = (savedCharacters || []).reduce((max: number, item: any) => {
-        const match = String(item.name || "").match(/^Avatar\\s+(\\d+)$/i);
+        const match = String(item.name || "").match(/^Avatar\s+(\d+)$/i);
         return match ? Math.max(max, Number(match[1])) : max;
       }, 0) + 1;
       const name = "Avatar " + nextNumber;
@@ -1118,10 +1124,16 @@ Deno.serve(async (req) => {
       const { data: character, error: characterError } = await db.from("vio_characters").select("id").eq("id", characterId).eq("user_id", user.id).maybeSingle();
       if (characterError) throw characterError;
       if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
+      const { data: previousAsset, error: previousError } = await db.from("vio_character_assets").select("bucket_id,storage_path").eq("character_id", characterId).eq("expression", expression).maybeSingle();
+      if (previousError) throw previousError;
       const { error } = await db.from("vio_character_assets").upsert({ user_id: user.id, character_id: character.id, expression, storage_path: path, bucket_id: "vio-studio-assets", mime_type: mime, size_bytes: size, updated_at: new Date().toISOString() }, { onConflict: "character_id,expression" });
       if (error) throw error;
       const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id }, { onConflict: "user_id" });
       if (profileError) throw profileError;
+      if (previousAsset && (previousAsset.storage_path !== path || previousAsset.bucket_id !== "vio-studio-assets")) {
+        const job = await enqueueStorageCleanup(db, previousAsset.bucket_id, previousAsset.storage_path, user.id, user.id, "character_expression_replaced");
+        try { await processStorageCleanup(db, job); } catch (cleanupError) { console.error("Previous character expression cleanup queued", job.id, cleanupError); }
+      }
       return json({ ok: true });
     }
 
