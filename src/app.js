@@ -1045,7 +1045,7 @@ let avatarScaleSaveTimer = 0;
 function changeAvatarScale(delta) {
   avatarScalePercent = Math.max(-100, Math.min(100, avatarScalePercent + delta));
   profilePreferences.avatarScalePercent = avatarScalePercent;
-  profilePreferences.scale = Math.max(.1, 1 + avatarScalePercent / 100);
+  profilePreferences.scale = Math.max(0, 1 + avatarScalePercent / 100);
   updateAvatarScaleWidget();
   drawPreview();
   clearTimeout(avatarScaleSaveTimer);
@@ -1231,7 +1231,7 @@ function renderAccessorySettingsList() {
     meta.append(name, hint);
     const remove = document.createElement("button");
     remove.type = "button"; remove.className = "icon-button delete-icon-button";
-    remove.textContent = "×"; remove.title = "Hapus aksesori";
+    remove.textContent = "🗑"; remove.title = "Hapus aksesori";
     remove.addEventListener("click", async event => {
       event.stopPropagation(); remove.disabled = true;
       try {
