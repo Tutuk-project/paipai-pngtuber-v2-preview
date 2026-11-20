@@ -816,31 +816,18 @@ Deno.serve(async (req) => {
 
     if (action === "my_assets") {
       const user = requireUser();
-      let { data: profile, error: profileError } = await db.from("vio_profiles").select("active_character_id,preferences").eq("user_id", user.id).maybeSingle();
-      if (profileError) throw profileError;
-      let characterId = profile?.active_character_id || null;
-      if (!characterId) {
-        const { data: first, error: firstError } = await db.from("vio_characters").select("id").eq("user_id", user.id).order("created_at").limit(1).maybeSingle();
-        if (firstError) throw firstError;
-        characterId = first?.id || null;
-        if (characterId) {
-          const { error } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: characterId, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-          if (error) throw error;
-        }
-      }
+      const { data: assets, error } = await db.from("vio_character_assets").select("expression,storage_path,bucket_id,character_id").eq("user_id", user.id);
+      if (error) throw error;
       const signedAssets: Record<string, string> = {};
-      if (characterId) {
-        const { data: assets, error } = await db.from("vio_character_assets").select("expression,storage_path,bucket_id").eq("user_id", user.id).eq("character_id", characterId);
-        if (error) throw error;
-        for (const asset of assets || []) {
-          const { data } = await db.storage.from(asset.bucket_id).createSignedUrl(asset.storage_path, 3600);
-          if (data?.signedUrl) signedAssets[asset.expression] = data.signedUrl;
-        }
+      for (const asset of assets || []) {
+        const { data } = await db.storage.from(asset.bucket_id).createSignedUrl(asset.storage_path, 3600);
+        if (data?.signedUrl) signedAssets[asset.expression] = data.signedUrl;
       }
+      const { data: profile, error: profileError } = await db.from("vio_profiles").select("active_character_id,preferences").eq("user_id", user.id).maybeSingle();
+      if (profileError) throw profileError;
       const signedPreferences = await signBackground(db, profile?.preferences || {});
       let accessoryQuery = db.from("vio_character_accessories").select("id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order").eq("user_id", user.id).order("sort_order");
-      if (characterId) accessoryQuery = accessoryQuery.eq("character_id", characterId);
-      else accessoryQuery = accessoryQuery.eq("character_id", "00000000-0000-0000-0000-000000000000");
+      if (profile?.active_character_id) accessoryQuery = accessoryQuery.eq("character_id", profile.active_character_id);
       const { data: accessories, error: accessoryError } = await accessoryQuery;
       if (accessoryError) throw accessoryError;
       const signedAccessories = await Promise.all((accessories || []).map(async (item: any) => {
@@ -848,128 +835,10 @@ Deno.serve(async (req) => {
         if (signError || !data?.signedUrl) return null;
         return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
       }));
-      return json({ ok: true, character_id: characterId, assets: signedAssets, accessories: signedAccessories.filter(Boolean), background: signedPreferences.background || null });
+      return json({ ok: true, assets: signedAssets, accessories: signedAccessories.filter(Boolean), background: signedPreferences.background || null });
     }
 
-        if (action === "character_library") {
-      const user = requireUser();
-      let { data: profile, error: profileError } = await db.from("vio_profiles").select("active_character_id").eq("user_id", user.id).maybeSingle();
-      if (profileError) throw profileError;
-      let { data: characters, error } = await db.from("vio_characters").select("id,name,is_saved,created_at").eq("user_id", user.id).order("created_at", { ascending: true });
-      if (error) throw error;
-      if (!characters?.length) {
-        const { data: draft, error: draftError } = await db.from("vio_characters").insert({ user_id: user.id, name: "Draft", is_saved: false }).select("id,name,is_saved,created_at").single();
-        if (draftError) throw draftError;
-        characters = [draft];
-        const { error: profileWriteError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: draft.id }, { onConflict: "user_id" });
-        if (profileWriteError) throw profileWriteError;
-        profile = { active_character_id: draft.id };
-      }
-      let activeId = profile?.active_character_id || characters[0].id;
-      if (!characters.some((item: any) => item.id === activeId)) activeId = characters[0].id;
-      if (activeId !== profile?.active_character_id) {
-        const { error: setError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: activeId }, { onConflict: "user_id" });
-        if (setError) throw setError;
-      }
-      const items = await Promise.all((characters || []).map(async (character: any) => {
-        const { data: asset } = await db.from("vio_character_assets").select("storage_path,bucket_id").eq("user_id", user.id).eq("character_id", character.id).in("expression", ["idle", "thumbnail", "talking"]).order("expression").limit(1).maybeSingle();
-        let preview = null;
-        if (asset) {
-          const { data } = await db.storage.from(asset.bucket_id).createSignedUrl(asset.storage_path, 3600);
-          preview = data?.signedUrl || null;
-        }
-        return { ...character, preview, is_active: character.id === activeId };
-      }));
-      return json({ ok: true, active_character_id: activeId, characters: items });
-    }
-
-    if (action === "create_character_draft") {
-      const user = requireUser();
-      const { data: existingDraft, error: existingError } = await db.from("vio_characters").select("id,name,is_saved,created_at").eq("user_id", user.id).eq("is_saved", false).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (existingError) throw existingError;
-      let draft = existingDraft;
-      if (!draft) {
-        const { data, error } = await db.from("vio_characters").insert({ user_id: user.id, name: "Draft", is_saved: false }).select("id,name,is_saved,created_at").single();
-        if (error) throw error;
-        draft = data;
-      }
-      const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: draft.id, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      if (profileError) throw profileError;
-      await audit(db, user.id, user.id, "character_draft_created", { character_id: draft.id, reused: !!existingDraft });
-      return json({ ok: true, character: draft, reused: !!existingDraft });
-    }
-
-    if (action === "set_active_character") {
-      const user = requireUser();
-      const characterId = String(body.character_id || "");
-      const { data: character, error: lookupError } = await db.from("vio_characters").select("id").eq("id", characterId).eq("user_id", user.id).maybeSingle();
-      if (lookupError) throw lookupError;
-      if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
-      const { error } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      if (error) throw error;
-      await audit(db, user.id, user.id, "active_character_changed", { character_id: character.id });
-      return json({ ok: true, character_id: character.id });
-    }
-
-    if (action === "save_character") {
-      const user = requireUser();
-      const characterId = String(body.character_id || "");
-      const { data: character, error: lookupError } = await db.from("vio_characters").select("id,name,is_saved").eq("id", characterId).eq("user_id", user.id).maybeSingle();
-      if (lookupError) throw lookupError;
-      if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
-      if (character.is_saved) return json({ ok: true, character, already_saved: true });
-      const { data: savedCharacters, error: countError } = await db.from("vio_characters").select("name").eq("user_id", user.id).eq("is_saved", true);
-      if (countError) throw countError;
-      const nextNumber = (savedCharacters || []).reduce((max: number, item: any) => {
-        const match = String(item.name || "").match(/^Avatar\s+(\d+)$/i);
-        return match ? Math.max(max, Number(match[1])) : max;
-      }, 0) + 1;
-      const name = "Avatar " + nextNumber;
-      const { data: saved, error } = await db.from("vio_characters").update({ name, is_saved: true, updated_at: new Date().toISOString() }).eq("id", character.id).eq("user_id", user.id).select("id,name,is_saved,created_at").single();
-      if (error) throw error;
-      await audit(db, user.id, user.id, "character_saved", { character_id: character.id, name });
-      return json({ ok: true, character: saved });
-    }
-
-    if (action === "delete_character") {
-      const user = requireUser();
-      const characterId = String(body.character_id || "");
-      const { data: character, error: characterError } = await db.from("vio_characters").select("id,name,is_saved").eq("id", characterId).eq("user_id", user.id).maybeSingle();
-      if (characterError) throw characterError;
-      if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
-      const [{ data: assets, error: assetsError }, { data: accessories, error: accessoriesError }] = await Promise.all([
-        db.from("vio_character_assets").select("bucket_id,storage_path").eq("character_id", characterId).eq("user_id", user.id),
-        db.from("vio_character_accessories").select("bucket_id,storage_path").eq("character_id", characterId).eq("user_id", user.id)
-      ]);
-      if (assetsError) throw assetsError;
-      if (accessoriesError) throw accessoriesError;
-      const objects = [...(assets || []), ...(accessories || [])];
-      const jobs = [];
-      for (const object of objects) {
-        jobs.push(await enqueueStorageCleanup(db, object.bucket_id, object.storage_path, user.id, user.id, "character_delete"));
-      }
-      const { error: deleteError } = await db.from("vio_characters").delete().eq("id", characterId).eq("user_id", user.id);
-      if (deleteError) throw deleteError;
-      const { data: next, error: nextError } = await db.from("vio_characters").select("id").eq("user_id", user.id).order("created_at", { ascending: true }).limit(1).maybeSingle();
-      if (nextError) throw nextError;
-      const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: next?.id || null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      if (profileError) throw profileError;
-      let cleaned = 0, pending = 0;
-      for (const job of jobs) {
-        try {
-          const result = await processStorageCleanup(db, job);
-          if (result.ok) cleaned++;
-          else pending++;
-        } catch (cleanupError) {
-          pending++;
-          console.error("Character asset cleanup failed", job.id, cleanupError);
-        }
-      }
-      await audit(db, user.id, user.id, "character_deleted", { character_id: characterId, asset_count: objects.length, cleanup_pending: pending });
-      return json({ ok: true, active_character_id: next?.id || null, removed_assets: objects.length, cleanup_pending: pending });
-    }
-
-        if (action === "get_my_active_room") {
+    if (action === "get_my_active_room") {
       const user = requireUser();
       const { data, error } = await db.from("vio_room_members")
         .select("room_id,vio_rooms!inner(id,room_code,capacity,purpose,status,host_user_id,expires_at)")
@@ -1078,12 +947,13 @@ Deno.serve(async (req) => {
     if (action === "room_members") {
       const user = requireUser();
       const roomId = String(body.room_id || "");
-      const { data: membership } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
+      const { data: membership, error: membershipError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
+      if (membershipError) throw membershipError;
       if (!membership) return json({ ok: false, error: "You are not a member of this room." }, 403);
-      const { data: members, error } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username),vio_profiles!inner(preferences,active_character_id),vio_characters(id,name,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order)),vio_room_overrides(overrides)").eq("room_id", roomId);
+      const { data: members, error } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,name,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides)").eq("room_id", roomId);
       if (error) throw error;
       const mapped = await Promise.all((members || []).map(async (member: any) => {
-        const activeCharacter = (member.vio_characters || []).find((item: any) => item.id === member.vio_profiles?.active_character_id) || member.vio_characters?.[0];
+        const activeCharacter = (member.vio_app_users?.characters || []).find((item: any) => item.id === member.vio_app_users?.profile?.active_character_id) || member.vio_characters?.[0];
         const assets: Record<string, string> = {};
         for (const asset of activeCharacter?.vio_character_assets || []) {
           const { data: signed } = await db.storage.from(asset.bucket_id).createSignedUrl(asset.storage_path, 3600);
@@ -1094,7 +964,7 @@ Deno.serve(async (req) => {
           if (signError || !data?.signedUrl) return null;
           return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
-        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_profiles?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
+        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
       }));
       return json({ ok: true, members: mapped });
     }
@@ -1103,7 +973,8 @@ Deno.serve(async (req) => {
       const user = requireUser();
       const roomId = String(body.room_id || "");
       const overrides = body.overrides && typeof body.overrides === "object" ? body.overrides as Json : {};
-      const { data: member } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
+      const { data: member, error: memberError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
+      if (memberError) throw memberError;
       if (!member) return json({ ok: false, error: "Not a room member." }, 403);
       const allowed = ["scale", "x", "y", "sensitivity", "boostDb", "deviceId"];
       const clean: Json = {};
@@ -1119,35 +990,26 @@ Deno.serve(async (req) => {
       const expression = String(body.expression || "");
       const mime = String(body.mime_type || "");
       const size = Number(body.size_bytes);
-      const characterId = String(body.character_id || "");
-      if (path.length > 512 || !path.startsWith(`${user.id}/characters/${characterId}/`) || path.split("/").some(part => !part || part === "." || part === "..") || !/^[0-9a-f-]{36}$/i.test(characterId) || !["idle", "talking", "blink", "talking_blink", "thumbnail"].includes(expression) || !["image/png", "image/webp"].includes(mime) || !Number.isSafeInteger(size) || size < 1 || size > 8388608) return json({ ok: false, error: "Asset metadata is invalid." }, 400);
-      const { data: character, error: characterError } = await db.from("vio_characters").select("id").eq("id", characterId).eq("user_id", user.id).maybeSingle();
-      if (characterError) throw characterError;
-      if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
-      const { data: previousAsset, error: previousError } = await db.from("vio_character_assets").select("bucket_id,storage_path").eq("character_id", characterId).eq("expression", expression).maybeSingle();
-      if (previousError) throw previousError;
+      if (path.length > 512 || !path.startsWith(`${user.id}/`) || path.split("/").some(part => !part || part === "." || part === "..") || !["idle", "talking", "blink", "talking_blink", "thumbnail"].includes(expression) || !["image/png", "image/webp"].includes(mime) || !Number.isSafeInteger(size) || size < 1 || size > 8388608) return json({ ok: false, error: "Asset metadata is invalid." }, 400);
+      let { data: character } = await db.from("vio_characters").select("id").eq("user_id", user.id).eq("name", "Default").maybeSingle();
+      if (!character) {
+        const { data, error } = await db.from("vio_characters").insert({ user_id: user.id, name: "Default" }).select("id").single();
+        if (error) throw error;
+        character = data;
+        await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id });
+      }
       const { error } = await db.from("vio_character_assets").upsert({ user_id: user.id, character_id: character.id, expression, storage_path: path, bucket_id: "vio-studio-assets", mime_type: mime, size_bytes: size, updated_at: new Date().toISOString() }, { onConflict: "character_id,expression" });
       if (error) throw error;
-      const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id }, { onConflict: "user_id" });
-      if (profileError) throw profileError;
-      if (previousAsset && (previousAsset.storage_path !== path || previousAsset.bucket_id !== "vio-studio-assets")) {
-        const job = await enqueueStorageCleanup(db, previousAsset.bucket_id, previousAsset.storage_path, user.id, user.id, "character_expression_replaced");
-        try { await processStorageCleanup(db, job); } catch (cleanupError) { console.error("Previous character expression cleanup queued", job.id, cleanupError); }
-      }
       return json({ ok: true });
     }
 
-        if (action === "record_accessory") {
+    if (action === "record_accessory") {
       const user = requireUser();
       const storagePath = String(body.storage_path || "");
-      const characterId = String(body.character_id || "");
-      const name = String(body.name || "Aksesori").trim().slice(0, 120);
+      const name = String(body.name || "Accessory").trim().slice(0, 120);
       const mime = String(body.mime_type || "");
       const size = Number(body.size_bytes);
-      if (storagePath.length > 512 || !/^[0-9a-f-]{36}$/i.test(characterId) || !storagePath.startsWith(`${user.id}/characters/${characterId}/accessories/`) || storagePath.split("/").some(part => !part || part === "." || part === "..") || !["image/png", "image/webp"].includes(mime) || !Number.isSafeInteger(size) || size < 1 || size > 8388608) return json({ ok: false, error: "Accessory metadata is invalid." }, 400);
-      const { data: character, error: characterError } = await db.from("vio_characters").select("id").eq("id", characterId).eq("user_id", user.id).maybeSingle();
-      if (characterError) throw characterError;
-      if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
+      if (storagePath.length > 512 || !storagePath.startsWith(`${user.id}/characters/default/accessories/`) || storagePath.split("/").some(part => !part || part === "." || part === "..") || !["image/png", "image/webp"].includes(mime) || !Number.isSafeInteger(size) || size < 1 || size > 8388608) return json({ ok: false, error: "Accessory metadata is invalid." }, 400);
       const pathParts = storagePath.split("/");
       const fileName = pathParts.pop() || "";
       const folderPath = pathParts.join("/");
@@ -1159,14 +1021,21 @@ Deno.serve(async (req) => {
       if (Number.isFinite(storedSize) && storedSize !== size) return json({ ok: false, error: "Uploaded accessory size does not match its metadata." }, 409);
       const storedMime = String(storedFile.metadata?.mimetype || storedFile.metadata?.contentType || "");
       if (storedMime && storedMime !== mime) return json({ ok: false, error: "Uploaded accessory MIME type does not match its metadata." }, 409);
-      const { count, error: countError } = await db.from("vio_character_accessories").select("id", { count: "exact", head: true }).eq("character_id", characterId);
-      if (countError) throw countError;
-      const { data: accessory, error } = await db.from("vio_character_accessories").insert({ user_id: user.id, character_id: characterId, name: name || `Aksesori ${(count || 0) + 1}`, storage_path: storagePath, bucket_id: "vio-studio-assets", mime_type: mime, size_bytes: size, sort_order: count || 0 }).select("id").single();
+      let { data: character, error: characterError } = await db.from("vio_characters").select("id").eq("user_id", user.id).eq("name", "Default").maybeSingle();
+      if (characterError) throw characterError;
+      if (!character) {
+        const { data, error } = await db.from("vio_characters").insert({ user_id: user.id, name: "Default" }).select("id").single();
+        if (error) throw error;
+        character = data;
+        const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id });
+        if (profileError) throw profileError;
+      }
+      const { data: accessory, error } = await db.from("vio_character_accessories").insert({ user_id: user.id, character_id: character.id, name, storage_path: storagePath, bucket_id: "vio-studio-assets", mime_type: mime, size_bytes: size }).select("id").single();
       if (error) throw error;
       return json({ ok: true, accessory_id: accessory.id });
     }
 
-        if (action === "update_accessory") {
+    if (action === "update_accessory") {
       const user = requireUser();
       const accessoryId = String(body.accessory_id || "");
       const updates: Record<string, unknown> = {};
@@ -1232,11 +1101,11 @@ Deno.serve(async (req) => {
       if (error || !room || room.status !== "active" || new Date(room.expires_at).getTime() <= Date.now() || room.overlay_token_hash !== await sha256(token)) return json({ ok: false, error: "Overlay link is invalid or room is closed or expired." }, 403);
       const { error: deviceError } = await db.from("vio_overlay_devices").upsert({ auth_user_id: authUser.id, room_id: roomId }, { onConflict: "auth_user_id" });
       if (deviceError) throw deviceError;
-      const { data: members, error: memberError } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username),vio_profiles!inner(preferences,active_character_id),vio_characters(id,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order)),vio_room_overrides(overrides)").eq("room_id", roomId);
+      const { data: members, error: memberError } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides)").eq("room_id", roomId);
       if (memberError) throw memberError;
       const mapped = await Promise.all((members || []).map(async (member: any) => {
         const assets: Record<string, string> = {};
-        const character = (member.vio_characters || []).find((item: any) => item.id === member.vio_profiles?.active_character_id) || member.vio_characters?.[0];
+        const character = (member.vio_app_users?.characters || []).find((item: any) => item.id === member.vio_app_users?.profile?.active_character_id) || member.vio_characters?.[0];
         for (const asset of character?.vio_character_assets || []) {
           const { data: signed } = await db.storage.from(asset.bucket_id).createSignedUrl(asset.storage_path, 3600);
           if (signed?.signedUrl) assets[asset.expression] = signed.signedUrl;
@@ -1246,15 +1115,25 @@ Deno.serve(async (req) => {
           if (signError || !data?.signedUrl) return null;
           return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
-        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_profiles?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
+        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
       }));
       return json({ ok: true, room: { id: room.id, capacity: room.capacity, host_user_id: room.host_user_id }, members: mapped });
     }
 
     return json({ ok: false, error: `Unknown action: ${action}` }, 400);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const map: Record<string, number> = { DEVICE_NOT_PAIRED: 401, ADMIN_ONLY: 403, ACCOUNT_NOT_FOUND: 404, PAIRING_CODE_INVALID: 403, DEVICE_ALREADY_BOUND: 409, ROOM_NOT_FOUND: 404, ROOM_FULL: 409, ALREADY_IN_ROOM: 409, ADMIN_ALREADY_EXISTS: 409 };
-    return json({ ok: false, error: message }, map[message] || 400);
+    const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
+    const message = error instanceof Error ? error.message : String(value.message || value.details || error || "Unknown backend error");
+    const code = typeof value.code === "string" ? value.code : undefined;
+    const details = typeof value.details === "string" ? value.details : undefined;
+    const hint = typeof value.hint === "string" ? value.hint : undefined;
+    console.error("vio-api request failed", { message, code, details, hint });
+    const map: Record<string, number> = {
+      DEVICE_NOT_PAIRED: 401, ADMIN_ONLY: 403, ACCOUNT_NOT_FOUND: 404,
+      PAIRING_CODE_INVALID: 403, DEVICE_ALREADY_BOUND: 409, ROOM_NOT_FOUND: 404,
+      ROOM_FULL: 409, ALREADY_IN_ROOM: 409, ADMIN_ALREADY_EXISTS: 409
+    };
+    const status = map[message] || (code ? 500 : 400);
+    return json({ ok: false, error: message, ...(code ? { code } : {}), ...(details ? { details } : {}), ...(hint ? { hint } : {}) }, status);
   }
 });
