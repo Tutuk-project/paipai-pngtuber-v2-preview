@@ -32,7 +32,7 @@ let activeMakeupEffect = null;
 let characterDeleteDialog = null;
 let avatarScalePercent = 0;
 let profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "" };
-let roomOverrides = { scale: 1, x: 0, y: 0, sensitivity: 1, boostDb: 6, deviceId: "" };
+let roomOverrides = { scale: 1, x: 0, y: 0, sensitivity: 1, boostDb: 6, deviceId: "", showGrid: false };
 let renderFrame = 0;
 let lastRoomStageFrame = 0;
 let playerSequence = 0;
@@ -1593,6 +1593,30 @@ function renderRoomControls(options = {}) {
 
   const layoutGroup = createRoomControlGroup("Avatar layout", "Atur skala dan posisi avatar hanya untuk room aktif.");
   const audioGroup = createRoomControlGroup("Audio input", "Atur sumber mikrofon dan sensitivitas deteksi suara.");
+  const gridField = document.createElement("label");
+  gridField.className = "check-field";
+  const gridToggle = document.createElement("input");
+  gridToggle.type = "checkbox";
+  gridToggle.id = "roomCompositionGrid";
+  gridToggle.checked = roomOverrides.showGrid === true;
+  const gridText = document.createElement("span");
+  gridText.textContent = "Tampilkan grid komposisi 3×3 di preview dan OBS";
+  gridToggle.addEventListener("change", async () => {
+    roomOverrides.showGrid = gridToggle.checked;
+    const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
+    if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), showGrid: roomOverrides.showGrid };
+    renderRoomParticipants();
+    try {
+      await api("set_room_override", { room_id: currentRoom.id, overrides: { showGrid: roomOverrides.showGrid } });
+      await broadcastPlayerLayout();
+    } catch (error) {
+      showToast(`Grid gagal disimpan: ${error.message}`, "error");
+      gridToggle.checked = !gridToggle.checked;
+      roomOverrides.showGrid = gridToggle.checked;
+    }
+  });
+  gridField.append(gridToggle, gridText);
+  layoutGroup.fields.append(gridField);
 
   const deviceField = document.createElement("div");
   deviceField.className = "room-control-field room-device-field";
@@ -1753,8 +1777,8 @@ async function broadcastPlayerState(state) {
 
 async function broadcastPlayerLayout() {
   if (!roomChannel || !currentRoom) return;
-  const { scale, x, y } = roomOverrides;
-  await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y }, at: Date.now() } });
+  const { scale, x, y, showGrid } = roomOverrides;
+  await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid }, at: Date.now() } });
 }
 
 async function broadcastMemberAssetsUpdated() {
@@ -1776,7 +1800,8 @@ async function loadRoomMembers() {
       y: 0,
       sensitivity: Number(profilePreferences.sensitivity ?? 1),
       boostDb: Number(profilePreferences.boostDb ?? 6),
-      deviceId: String(profilePreferences.deviceId || "")
+      deviceId: String(profilePreferences.deviceId || ""),
+      showGrid: false
     };
     roomOverrides = { ...profileRoomDefaults, ...(ownMember?.overrides || {}) };
     if (audio) {
@@ -1902,6 +1927,22 @@ function renderRoomParticipants() {
   if (!renderFrame) renderFrame = requestAnimationFrame(drawRoomStageFrame);
 }
 
+function drawRoomCompositionGrid(ctx, width, height) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(210,245,235,.42)";
+  ctx.lineWidth = Math.max(1, Math.round(width / 1600));
+  ctx.setLineDash([Math.max(5, width / 180), Math.max(4, width / 240)]);
+  for (let index = 1; index <= 2; index++) {
+    const x = width * index / 3, y = height * index / 3;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(210,245,235,.22)";
+  ctx.strokeRect(width * .02, height * .02, width * .96, height * .96);
+  ctx.restore();
+}
+
 function drawRoomStageFrame(now = performance.now()) {
   renderFrame = 0;
   if (!currentRoom) return;
@@ -1918,6 +1959,7 @@ function drawRoomStageFrame(now = performance.now()) {
       const entry = roomPreviewRenderers.get(member.user_id);
       if (entry?.canvas) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
     });
+    if (visible.some(member => member.overrides?.showGrid === true)) drawRoomCompositionGrid(ctx, canvas.width, canvas.height);
   }
   renderFrame = requestAnimationFrame(drawRoomStageFrame);
 }
