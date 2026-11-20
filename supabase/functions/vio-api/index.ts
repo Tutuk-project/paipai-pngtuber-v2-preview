@@ -173,7 +173,17 @@ Deno.serve(async (req) => {
       const username = String(body.username || "").trim().toLowerCase();
       const supplied = String(body.bootstrap_token || "");
       const expected = Deno.env.get("VIO_ADMIN_BOOTSTRAP_TOKEN") || "";
-      if (username !== "paipai77" || !expected || supplied.length < 20 || supplied !== expected) return json({ ok: false, error: "Admin bootstrap authorization failed." }, 403);
+      if (username !== "paipai77") return json({ ok: false, code: "BOOTSTRAP_USERNAME_INVALID", error: "Username bootstrap tidak valid. Gunakan akun Admin awal yang telah ditentukan." }, 400);
+      if (!expected || expected.length < 32) return json({ ok: false, code: "BOOTSTRAP_SECRET_MISSING", error: "Secret bootstrap belum dikonfigurasi dengan benar pada Supabase Development Edge Function. Atur ulang VIO_ADMIN_BOOTSTRAP_TOKEN." }, 503);
+      const suppliedBytes = new TextEncoder().encode(supplied);
+      const expectedBytes = new TextEncoder().encode(expected);
+      let tokenMatches = suppliedBytes.length === expectedBytes.length;
+      if (tokenMatches) {
+        let diff = 0;
+        for (let i = 0; i < expectedBytes.length; i++) diff |= suppliedBytes[i] ^ expectedBytes[i];
+        tokenMatches = diff === 0;
+      }
+      if (suppliedBytes.length < 32 || !tokenMatches) return json({ ok: false, code: "BOOTSTRAP_TOKEN_INVALID", error: "Token bootstrap tidak cocok dengan secret di Supabase Development. Buat token baru dan masukkan kembali." }, 403);
       const { data, error } = await db.rpc("vio_bootstrap_admin", { p_auth_uid: authUser.id, p_username: username });
       if (error) throw error;
       await audit(db, data.id, data.id, "bootstrap_admin", { username });
