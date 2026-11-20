@@ -1783,15 +1783,16 @@ function renderRoomParticipants() {
     renderFrame = 0;
     for (const entry of roomPreviewRenderers.values()) entry.renderer.stop();
     roomPreviewRenderers.clear();
-    tags.textContent = "No participant data";
+    tags.hidden = true;
     if (notice) {
-      notice.textContent = "Daftar peserta belum berhasil dimuat. Periksa koneksi room, lalu buka ulang Collaboration.";
+      notice.textContent = "Menunggu peserta masuk ke room…";
       notice.hidden = false;
       notice.classList.remove("is-error");
     }
     return;
   }
 
+  tags.hidden = false;
   const hasAvatarAssets = visible.some(member => Object.values(member.assets || {}).some(Boolean));
   if (notice) {
     notice.textContent = hasAvatarAssets
