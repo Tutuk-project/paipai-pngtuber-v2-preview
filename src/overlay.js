@@ -22,6 +22,11 @@ const canvas = document.getElementById("stage");
 const ctx = canvas?.getContext("2d");
 const statusEl = document.getElementById("status");
 const debugMode = new URLSearchParams(location.search).get("debug") === "1";
+const params = new URLSearchParams(location.search);
+let centerGuideEnabled = params.get("centerGuide") === "1";
+let controlsVisible = params.get("controls") === "1";
+let gridEnabled = params.get("grid") === "1";
+let realtimeConnected = false;
 
 function setStatus(message, error = false, forceVisible = true) {
   if (!statusEl) return;
