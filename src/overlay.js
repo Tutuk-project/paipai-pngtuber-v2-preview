@@ -84,6 +84,11 @@ function render() {
   });
 }
 
+function compositeLoop() {
+  render();
+  compositeFrame = requestAnimationFrame(compositeLoop);
+}
+
 async function refreshMembers() {
   const result = await api("overlay_connect", { room_id: roomId, overlay_token: overlayToken });
   members = result.members || [];
@@ -151,6 +156,7 @@ async function boot() {
 
     setStatus("Memuat peserta dan aset avatar…");
     await refreshMembers();
+    if (!compositeFrame) compositeFrame = requestAnimationFrame(compositeLoop);
     channel = supabase.channel(`room:${roomId}`, { config: { private: true } })
       .on("broadcast", { event: "player-state" }, ({ payload }) => {
         if (!payload?.user_id || !["idle", "talking"].includes(payload.state)) return;
@@ -201,5 +207,7 @@ boot();
 
 window.addEventListener("pagehide", () => {
   if (refreshTimer) clearInterval(refreshTimer);
+  if (compositeFrame) cancelAnimationFrame(compositeFrame);
+  compositeFrame = 0;
   for (const entry of playerRenderers.values()) entry.renderer.stop();
 });
