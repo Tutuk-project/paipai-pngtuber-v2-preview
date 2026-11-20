@@ -1337,7 +1337,7 @@ function drawPreview() {
   const height = Math.max(320, Math.min(3840, Math.round(Number(profilePreferences.outputHeight) || 1920)));
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   const stageFrame = canvas.closest(".stage-frame");
-  if (stageFrame) stageFrame.style.aspectRatio = "4 / 3";
+  if (stageFrame) { stageFrame.style.aspectRatio = `${width} / ${height}`; stageFrame.style.height = "auto"; }
   updateAvatarScaleWidget();
   const roomStage = $("roomStage");
   if (roomStage && (roomStage.width !== width || roomStage.height !== height)) {
