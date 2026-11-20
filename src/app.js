@@ -1649,7 +1649,7 @@ function renderRoomControls(options = {}) {
   layoutReset.textContent = "Reset avatar layout";
   layoutReset.addEventListener("click", async () => {
     roomOverrides.scale = 1; roomOverrides.x = 0; roomOverrides.y = 0;
-    renderRoomControls({ refreshDevices: false });
+    renderRoomControls();
     renderRoomParticipants();
     try {
       await api("set_room_override", { room_id: currentRoom.id, overrides: { scale: 1, x: 0, y: 0 } });
@@ -1659,10 +1659,13 @@ function renderRoomControls(options = {}) {
     }
   });
   layoutGroup.group.append(layoutReset);
+  const controlsLayout = document.createElement("div");
+  controlsLayout.className = "room-controls-layout";
+  controlsLayout.append(layoutGroup.group, audioGroup.group);
   const note = document.createElement("p");
   note.className = "room-controls-note";
   note.textContent = "Perubahan ini hanya berlaku di room aktif dan tidak menimpa pengaturan profil.";
-  panel.append(layoutGroup.group, audioGroup.group, note);
+  panel.append(controlsLayout, note);
   if (options.refreshDevices !== false) refreshAudioDevices();
 }
 
@@ -1737,7 +1740,7 @@ async function loadRoomMembers() {
     if (ownMember?.overrides) {
       roomOverrides = { ...roomOverrides, ...ownMember.overrides };
       audio?.setOptions({ deviceId: roomOverrides.deviceId || "", sensitivity: roomOverrides.sensitivity ?? 1, boostDb: roomOverrides.boostDb ?? 6 });
-      renderRoomControls({ refreshDevices: false });
+      renderRoomControls();
     }
     for (const member of roomMembers) member.state = remotePlayerStates.get(member.user_id) || member.state || "idle";
     renderRoomParticipants();
@@ -1890,14 +1893,14 @@ async function generateOverlayLink(button = null) {
   const sourceButton = button || $("obsLinkButton") || $("roomObsLink");
   if (overlayGenerationBusy) return;
   if (generatedOverlayUrl) {
+    $("overlayLinkUrl").value = generatedOverlayUrl;
+    if (!$("overlayLinkDialog").open) $("overlayLinkDialog").showModal();
     try {
-        if (sourceButton) { sourceButton.disabled = true; sourceButton.textContent = "Menyalin…"; }
+      if (sourceButton) { sourceButton.disabled = true; sourceButton.textContent = "Menyalin…"; }
       await copyText(generatedOverlayUrl);
-      $("overlayLinkUrl").value = generatedOverlayUrl;
-      $("overlayLinkDialog").showModal();
       showToast("Link OBS berhasil disalin");
     } catch (error) {
-      showToast(`Gagal menyalin link: ${error.message}`, "error");
+      showToast(`Link siap, tetapi gagal disalin otomatis: ${error.message}`, "error");
     } finally {
       syncOverlayGeneratorButtons("Salin Link", false, "copy");
     }
