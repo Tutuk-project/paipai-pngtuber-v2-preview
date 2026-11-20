@@ -6,7 +6,7 @@ let channel;
 let roomId;
 let overlayToken;
 let members = [];
-let refreshTimer = 0;
+let refreshTimer = 0;\nlet compositeFrame = 0;
 const states = new Map();
 const stateSequences = new Map();
 const layoutSequences = new Map();
