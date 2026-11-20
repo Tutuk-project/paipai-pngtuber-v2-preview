@@ -70,3 +70,33 @@ test("accessories are included in collaboration and OBS snapshots and rendered b
   assert.ok(overlay.includes("renderer.setAccessories(member.accessories || [])"));
   assert.ok(renderer.includes("item.follow !== false"));
 });
+
+test("character library actions exist and expression uploads are bound to an owned character", () => {
+  const edge = read("supabase/functions/vio-api/index.ts");
+  for (const action of ["character_library", "create_character_draft", "save_character", "set_active_character", "delete_character"]) {
+    assert.ok(edge.includes('action === "' + action + '"'), "missing character action " + action);
+  }
+  const record = edge.match(/if \(action === "record_asset"\)[\s\S]*?if \(action === "record_accessory"\)/)?.[0] || "";
+  assert.match(record, /body\.character_id/);
+  assert.match(record, /eq\("id", characterId\)\.eq\("user_id", user\.id\)/);
+  assert.match(record, /expectedPath/);
+  assert.doesNotMatch(record, /eq\("name", "Default"\)/);
+});
+
+test("my_assets only returns the selected character assets and includes its id", () => {
+  const edge = read("supabase/functions/vio-api/index.ts");
+  const handler = edge.match(/if \(action === "my_assets"\)[\s\S]*?if \(action === "get_my_active_room"\)/)?.[0] || "";
+  assert.match(handler, /character_id: characterId/);
+  assert.match(handler, /eq\("character_id", characterId/);
+  assert.match(handler, /active_character_id/);
+});
+
+test("accessory upload is scoped to the selected owned character, not a Default name", () => {
+  const edge = read("supabase/functions/vio-api/index.ts");
+  const handler = edge.match(/if \(action === "record_accessory"\)[\s\S]*?if \(action === "update_accessory"\)/)?.[0] || "";
+  assert.match(handler, /body\.character_id/);
+  assert.match(handler, /expectedPrefix/);
+  assert.match(handler, /pathParts.length !== 4/);
+  assert.match(handler, /eq\("id", characterId\)\.eq\("user_id", user\.id\)/);
+  assert.doesNotMatch(handler, /characters\/default|eq\("name", "Default"\)/);
+});
