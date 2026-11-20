@@ -1348,7 +1348,15 @@ function drawPreview() {
   const canvas = $("avatarCanvas");
   const width = Math.max(320, Math.min(3840, Math.round(Number(profilePreferences.outputWidth) || 1080)));
   const height = Math.max(320, Math.min(3840, Math.round(Number(profilePreferences.outputHeight) || 1920)));
-  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+  // The editor preview is not the stream output. Render it at a bounded backing
+  // resolution on mobile, while keeping the saved/exported output dimensions intact.
+  const previewScale = Math.min(1, 720 / Math.max(width, height));
+  const previewWidth = Math.max(1, Math.round(width * previewScale));
+  const previewHeight = Math.max(1, Math.round(height * previewScale));
+  if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
+    canvas.width = previewWidth;
+    canvas.height = previewHeight;
+  }
   const stageFrame = canvas.closest(".stage-frame");
   if (stageFrame) { stageFrame.style.aspectRatio = `${width} / ${height}`; stageFrame.style.height = "auto"; }
   updateAvatarScaleWidget();
