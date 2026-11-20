@@ -125,7 +125,11 @@ async function boot() {
         if (seq && seq <= (layoutSequences.get(payload.user_id) || 0)) return;
         if (seq) layoutSequences.set(payload.user_id, seq);
         const member = members.find(item => item.user_id === payload.user_id);
-        if (member) member.overrides = { ...(member.overrides || {}), ...payload.overrides };
+        if (member) {
+          member.overrides = { ...(member.overrides || {}), ...payload.overrides };
+          const slotWidth = canvas.width / Math.max(1, Math.min(4, members.length));
+          ensurePlayerRenderer(member, slotWidth);
+        }
         render();
       })
       .on("broadcast", { event: "member-assets-updated" }, () => {
