@@ -126,6 +126,23 @@ async function startInvisibleSoloMicrophone() {
   }
 }
 
+function drawCompositionGrid(context, width, height) {
+  context.save();
+  context.strokeStyle = "rgba(210,245,235,.42)";
+  context.lineWidth = Math.max(1, Math.round(width / 1600));
+  context.setLineDash([Math.max(5, width / 180), Math.max(4, width / 240)]);
+  for (let index = 1; index <= 2; index++) {
+    const x = width * index / 3;
+    const y = height * index / 3;
+    context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
+    context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
+  }
+  context.setLineDash([]);
+  context.strokeStyle = "rgba(210,245,235,.22)";
+  context.strokeRect(width * .02, height * .02, width * .96, height * .96);
+  context.restore();
+}
+
 function drawCompositeFrame(now) {
   if (!canvas || !ctx) return;
   if (now - lastCompositeFrame >= 1000 / 30) {
@@ -138,6 +155,7 @@ function drawCompositeFrame(now) {
         const entry = playerRenderers.get(member.user_id);
         if (entry && !entry.direct) ctx.drawImage(entry.canvas, slotWidth * index, 0, slotWidth, canvas.height);
       });
+      if (visible.some(member => member.overrides?.showGrid === true)) drawCompositionGrid(ctx, canvas.width, canvas.height);
     }
   }
   compositeRaf = requestAnimationFrame(drawCompositeFrame);
