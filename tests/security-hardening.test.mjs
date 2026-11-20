@@ -213,3 +213,25 @@ test("Solo overlay accepts Creator Talking broadcasts as a fallback even when lo
   assert.match(overlay, /states\.set\(payload\.user_id, payload\.state\)/);
   assert.match(overlay, /startInvisibleSoloMicrophone/);
 });
+
+
+test("Solo OBS renders its animation directly into the visible stage canvas", () => {
+  const overlay = read("src/overlay.js");
+  assert.match(overlay, /drawDirectlyToStage = roomPurpose === "personal_overlay"/);
+  assert.match(overlay, /AvatarRenderer owns the visible canvas and its animation loop/);
+  assert.match(overlay, /drawCompositeFrame/);
+});
+
+test("renderer keeps a decoded fallback avatar visible when a state asset is unavailable", () => {
+  const renderer = read("src/avatar-renderer.js");
+  assert.match(renderer, /this.assets\[expression\], this.assets\[this.state\], this.assets\.idle/);
+  assert.match(renderer, /candidates\.find\(item => item\.complete && item\.naturalWidth\)/);
+});
+
+test("editor preview uses bounded backing resolution without changing saved stream dimensions", () => {
+  const app = read("src/app.js");
+  const preview = app.match(/function drawPreview\(\)[\s\S]*?function accessoryCanvasPoint/)?.[0] || "";
+  assert.match(preview, /720 \/ Math\.max\(width, height\)/);
+  assert.match(preview, /profilePreferences\.outputWidth/);
+  assert.match(preview, /profilePreferences\.outputHeight/);
+});
