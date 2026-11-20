@@ -912,9 +912,13 @@ Deno.serve(async (req) => {
       if (lookupError) throw lookupError;
       if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
       if (character.is_saved) return json({ ok: true, character, already_saved: true });
-      const { count, error: countError } = await db.from("vio_characters").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_saved", true);
+      const { data: savedCharacters, error: countError } = await db.from("vio_characters").select("name").eq("user_id", user.id).eq("is_saved", true);
       if (countError) throw countError;
-      const name = "Avatar " + ((count || 0) + 1);
+      const nextNumber = (savedCharacters || []).reduce((max: number, item: any) => {
+        const match = String(item.name || "").match(/^Avatar\\s+(\\d+)$/i);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0) + 1;
+      const name = "Avatar " + nextNumber;
       const { data: saved, error } = await db.from("vio_characters").update({ name, is_saved: true, updated_at: new Date().toISOString() }).eq("id", character.id).eq("user_id", user.id).select("id,name,is_saved,created_at").single();
       if (error) throw error;
       await audit(db, user.id, user.id, "character_saved", { character_id: character.id, name });
@@ -1116,7 +1120,8 @@ Deno.serve(async (req) => {
       if (!character) return json({ ok: false, error: "CHARACTER_NOT_FOUND" }, 404);
       const { error } = await db.from("vio_character_assets").upsert({ user_id: user.id, character_id: character.id, expression, storage_path: path, bucket_id: "vio-studio-assets", mime_type: mime, size_bytes: size, updated_at: new Date().toISOString() }, { onConflict: "character_id,expression" });
       if (error) throw error;
-      await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id }, { onConflict: "user_id" });
+      const { error: profileError } = await db.from("vio_profiles").upsert({ user_id: user.id, active_character_id: character.id }, { onConflict: "user_id" });
+      if (profileError) throw profileError;
       return json({ ok: true });
     }
 
