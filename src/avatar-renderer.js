@@ -491,8 +491,8 @@ export class AvatarRenderer {
     const fit = Math.min((W * 0.86) / image.width, (H * 0.86) / image.height);
     const requestedPercent = Number(p.avatarScalePercent);
     const scaleMultiplier = Number.isFinite(requestedPercent)
-      ? Math.max(0.1, Math.min(2, 1 + requestedPercent / 100))
-      : Math.max(0.1, Math.min(2, Number(p.scale) || 1));
+      ? Math.max(0, Math.min(2, 1 + requestedPercent / 100))
+      : Math.max(0, Math.min(2, Number(p.scale) || 1));
     const breath = Math.sin(now / 1750 * Math.PI * 2) * (Number(p.breathing) || 0) / 100;
     const scale = fit * scaleMultiplier * (1 + breath);
     const width = image.width * scale, height = image.height * scale;
