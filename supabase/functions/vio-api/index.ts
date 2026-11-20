@@ -838,6 +838,20 @@ Deno.serve(async (req) => {
       return json({ ok: true, assets: signedAssets, accessories: signedAccessories.filter(Boolean), background: signedPreferences.background || null });
     }
 
+    if (action === "get_my_active_room") {
+      const user = requireUser();
+      const { data, error } = await db.from("vio_room_members")
+        .select("room_id,vio_rooms!inner(id,room_code,capacity,purpose,status,host_user_id,expires_at)")
+        .eq("user_id", user.id)
+        .eq("vio_rooms.status", "active")
+        .gt("vio_rooms.expires_at", new Date().toISOString())
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      const room = (data as any)?.vio_rooms || null;
+      return json({ ok: true, room });
+    }
+
     if (action === "create_room") {
       const user = requireUser();
       const capacity = Number(body.capacity);
