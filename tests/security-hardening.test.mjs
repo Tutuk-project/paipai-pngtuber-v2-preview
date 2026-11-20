@@ -236,3 +236,24 @@ test("editor preview uses bounded backing resolution without changing saved stre
   assert.match(preview, /profilePreferences\.outputHeight/);
   assert.match(app, /now - lastRoomStageFrame >= 1000 \/ 30/);
 });
+
+
+test("Solo renderer publishes complete bounded frames without clearing visible OBS output", () => {
+  const renderer = read("src/avatar-renderer.js");
+  assert.match(renderer, /1280 \/ Math\.max\(outputWidth, outputHeight\)/);
+  assert.match(renderer, /this\.renderCanvas/);
+  assert.match(renderer, /if \(hasAvatar \|\| this\.accessories\.some/);
+  assert.match(renderer, /output\.drawImage\(this\.renderCanvas/);
+  assert.doesNotMatch(renderer, /const rows = 48/);
+});
+
+test("Collaboration grid is persisted, broadcast, and rendered in preview and OBS", () => {
+  const app = read("src/app.js");
+  const overlay = read("src/overlay.js");
+  const backend = read("supabase/functions/vio-api/index.ts");
+  assert.match(app, /roomCompositionGrid/);
+  assert.match(app, /showGrid/);
+  assert.match(app, /drawRoomCompositionGrid\(ctx, canvas\.width, canvas\.height\)/);
+  assert.match(overlay, /drawCompositionGrid\(ctx, canvas\.width, canvas\.height\)/);
+  assert.match(backend, /"showGrid"/);
+});
