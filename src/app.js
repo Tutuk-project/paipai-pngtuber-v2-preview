@@ -1046,6 +1046,7 @@ function changeAvatarScale(delta) {
   avatarScalePercent = Math.max(-100, Math.min(100, avatarScalePercent + delta));
   profilePreferences.avatarScalePercent = avatarScalePercent;
   profilePreferences.scale = Math.max(0, 1 + avatarScalePercent / 100);
+  roomOverrides.scale = profilePreferences.scale;
   updateAvatarScaleWidget();
   drawPreview();
   clearTimeout(avatarScaleSaveTimer);
@@ -1053,7 +1054,11 @@ function changeAvatarScale(delta) {
     if (!currentUser) return;
     try {
       await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: profilePreferences });
-      if (currentRoom) await broadcastMemberAssetsUpdated();
+      if (currentRoom) {
+        await api("set_room_override", { room_id: currentRoom.id, overrides: { scale: roomOverrides.scale } });
+        await loadRoomMembers();
+        await broadcastMemberAssetsUpdated();
+      }
     } catch (error) {
       showAppToast(`Skala avatar gagal disimpan: ${error.message}`, "error");
     }
