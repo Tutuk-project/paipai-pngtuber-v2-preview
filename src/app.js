@@ -1,5 +1,5 @@
 import { AudioEngine } from "./audio-engine.js?v=20261121-auto-mic-1";
-import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-avatar-fallback-1";
+import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-avatar-fallback-2";
 
 const $ = (id) => document.getElementById(id);
 const viewIds = ["loginGate", "editorView", "collaborationView", "adminView", "overlayView"];
