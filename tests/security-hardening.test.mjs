@@ -197,6 +197,14 @@ test("OBS overlay exposes gesture-based microphone controls while keeping render
   assert.match(html, /<canvas id="stage"/);
 });
 
+test("generated OBS links do not enable visible overlay control buttons", () => {
+  const app = read("src/app.js");
+  const generator = app.match(/async function generateOverlayLink\\([\\s\\S]*?async function loadAdminOverview/)?.[0] || "";
+  assert.match(generator, /url\\.hash = new URLSearchParams\\(\\{ room: result\\.room_id, token: result\\.overlay_token \\}\\)\\.toString\\(\\)/);
+  assert.doesNotMatch(generator, /searchParams\\.set\\(["']controls["']/);
+  assert.match(generator, /Keep the generated OBS source clean/);
+});
+
 test("overlay API returns room purpose for Solo or Collaboration rendering", () => {
   const edge = read("supabase/functions/vio-api/index.ts");
   const start = edge.indexOf('if (action === "overlay_connect")');
