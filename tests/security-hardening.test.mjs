@@ -371,11 +371,11 @@ test("editor view is revealed before optional navigation and settings rendering"
   const loginStart = app.indexOf("async function login(");
   const loginEnd = app.indexOf("async function loadCurrentProfile()", loginStart);
   const login = app.slice(loginStart, loginEnd);
-  const selectProfile = login.indexOf('selectMenu("profile")');
+  const selectProfile = login.indexOf('selectMenu("about")');
   const restoreRoom = login.indexOf("await restoreSavedRoom()");
-  assert.ok(selectProfile >= 0, "successful login must open the default profile view");
+  assert.ok(selectProfile >= 0, "successful login must open the About workspace");
   assert.ok(restoreRoom > selectProfile, "room restoration must happen after the editor is opened");
-  assert.doesNotMatch(login, /renderNavigation\(\);\s*selectMenu\("profile"\)/);
+  assert.doesNotMatch(login, /renderNavigation\\(\\);\\s*selectMenu\\("about"\\)/);
 });
 
 test("view switching tolerates missing optional DOM elements", () => {

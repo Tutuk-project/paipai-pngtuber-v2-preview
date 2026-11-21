@@ -87,7 +87,7 @@ test("collaboration preview and OBS overlay both render per-member accessories",
   const overlay = read("src/overlay.js");
   assert.ok(app.includes("entry.renderer.setAccessories(member.accessories || [])"));
   assert.ok(app.includes("roomPreviewRenderers.values()"));
-  assert.ok(app.includes("function drawRoomStageFrame()"));
+  assert.match(app, /function drawRoomStageFrame\(now = performance\.now\(\)\)/);
   assert.ok(app.includes("requestAnimationFrame(drawRoomStageFrame)"));
   assert.ok(overlay.includes("renderer.setAccessories(member.accessories || [])"));
 });
@@ -109,8 +109,8 @@ test("modular avatar renderer is wired into editor and OBS overlay", () => {
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");
   const renderer = read("src/avatar-renderer.js");
-  assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js"/);
-  assert.match(overlay, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js"/);
+  assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js(?:\?v=[^"]+)?"/);
+  assert.match(overlay, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js(?:\?v=[^"]+)?"/);
   for (const feature of ["drawBackground", "drawAvatar", "drawAccessories", "blinkDelay"]) assert.ok(renderer.includes(feature));
   for (const feature of ["glow", "shadow", "stroke", "filter", "distort"]) assert.ok(renderer.includes(feature));
 });
@@ -295,7 +295,7 @@ test("legacy effect composition order, distortion rows and motion timing are pre
   const sprite = renderer.slice(renderer.indexOf("effectSprite(image, ids)"), renderer.indexOf("drawEffectSprite("));
   assert.ok(sprite.indexOf("if (stroke)") < sprite.indexOf("if (bloom)"));
   assert.ok(sprite.indexOf("if (bloom)") < sprite.indexOf("if (shadow)"));
-  assert.ok(renderer.includes("const rows = 48"));
+  assert.match(renderer, /const rows = Math\.max\(12, Math\.min\(20, Math\.round\(sourceHeight \/ 80\)\)\)/);
   assert.ok(renderer.includes('target === "avatar"'));
   assert.ok(renderer.includes("bounceMs: 240"));
   assert.ok(renderer.includes("idleBob: 0.006"));
@@ -316,9 +316,9 @@ test("Solo output resolution remains profile-driven while Collaboration uses a l
   assert.ok(app.includes("const width = 1920"));
   assert.ok(app.includes('canvas.style.aspectRatio = "16 / 9"'));
   assert.ok(overlay.includes("const isCollaborationRoom = roomPurpose === \"collaboration\""));
-  assert.ok(overlay.includes("? 1920"));
-  assert.ok(overlay.includes("? 1080"));
-  assert.ok(overlay.includes("Number(output.outputWidth) || 1080"));
+  assert.ok(overlay.includes('requestedWidth = Number(params.get("width")) || 1920'));
+  assert.ok(overlay.includes('requestedHeight = Number(params.get("height")) || 1080'));
+  assert.ok(overlay.includes("Number(output.outputWidth) || 500"));
   assert.ok(edge.includes('"outputWidth", "outputHeight"'));
   assert.ok(edge.includes("outputWidth * outputHeight > 8294400"));
   assert.ok(edge.includes("is_host"));
@@ -347,7 +347,9 @@ test("private background media upload is owner-scoped and signed for editor, col
   assert.ok(migration.includes("'vio-backgrounds'"));
   assert.ok(migration.includes("public = false"));
   assert.ok(renderer.includes("setBackgroundVideo(src)"));
-  assert.ok(overlay.includes("renderer.setBackgroundVideo(background.mode === \"video\" ? background.src : null)"));
+  assert.ok(renderer.includes('this.setBackgroundVideo(background.src || null)'));
+  assert.ok(renderer.includes('this.setBackgroundImage(background.mode === "image" ? background.src || null : null)'));
+  assert.ok(overlay.includes("renderer.setPreferences(preferences)"));
   assert.ok(app.includes("entry.renderer.setBackgroundImage(background.mode === \"image\" ? background.src : null)"));
 });
 

@@ -38,7 +38,7 @@ jobs:
           grep -q 'room-controls-layout' src/app.js
           grep -q 'Room data unavailable' src/app.js
           grep -q 'setStatus' src/overlay.js
-          grep -q 'is-visible' overlay.html
+          grep -Fq '.debug .status{display:block}' overlay.html
           grep -q '.app-shell.in-room .room-actions' assets/app.css
           grep -q '.room-controls-layout' assets/app.css
           ! grep -q 'id="obs"' src/app.js
