@@ -28,6 +28,30 @@ export function sortRoomMembers(members = []) {
   return [...members].sort(compareRoomMembers);
 }
 
+export function resolveRoomAvatarLayouts(members = [], stageWidth = 1920, stageHeight = 1080) {
+  // Ranking is derived from database membership, never transient presence.
+  const ordered = sortRoomMembers(members);
+  return ordered.map((member, index) => {
+    const spriteProfile = { ...(member.preferences || {}), background: { mode: "transparent" } };
+    return { member, spriteProfile, preferences: resolveRoomAvatarPreferences(
+      spriteProfile, member.overrides || {}, stageWidth, stageHeight, index, ordered.length
+    ) };
+  });
+}
+
+export function resolveRoomBackgroundPreferences(members = []) {
+  const host = sortRoomMembers(members).find(member => member.is_host);
+  const background = host?.preferences?.background;
+  return { background: background ? { ...background } : { mode: "transparent" } };
+}
+
+export function mergeRoomMemberOverrides(members = [], actorUserId, targetUserId, patch = {}) {
+  if (!actorUserId || actorUserId !== targetUserId || !patch || typeof patch !== "object" || Array.isArray(patch)) return members;
+  return members.map(member => member.user_id === actorUserId
+    ? { ...member, overrides: { ...(member.overrides || {}), ...patch } }
+    : member);
+}
+
 export function resolveRoomAvatarPreferences(profile = {}, overrides = {}, stageWidth = 1920, stageHeight = 1080, memberIndex = 0, memberCount = 1) {
   const width = Math.max(1, Number(stageWidth) || 1920);
   const height = Math.max(1, Number(stageHeight) || 1080);
