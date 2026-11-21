@@ -647,6 +647,8 @@ export class AvatarRenderer {
         const shakeY = shake ? Math.cos(now / 17) * Math.sin(now / 27) * shake * 24 : 0;
         ctx.translate(x + W / 2 + shakeX, y + H / 2 + shakeY);
       }
+      const accessoryRotation = Number(item.rotation) || 0;
+      if (accessoryRotation) ctx.rotate(accessoryRotation * Math.PI / 180);
       if (item.mirror && this.preferences.mirror !== false) ctx.scale(-1, 1);
       if (ids.includes("shadow")) {
         ctx.shadowColor = effects.shadow.color || "#101010";
