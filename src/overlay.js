@@ -1,4 +1,4 @@
-import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-ui-reorg-1";
+import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-live-sync-2";
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
 
 let config;
@@ -181,27 +181,12 @@ function drawCompositeFrame(now) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const visible = members.slice(0, 4);
     if (visible.length) {
-      const isCollaboration = roomPurpose === "collaboration";
-      const showCenter = isCollaboration && (
-        centerGuideEnabled || visible.some(member => member.overrides?.showCenterGuide === true)
-      );
-      const showGrid = isCollaboration && (
-        gridEnabled || visible.some(member => member.overrides?.showGrid === true)
-      );
-
-      // Collaboration output is opaque black only while a composition guide
-      // is enabled. With both guide layers disabled, the canvas stays alpha.
-      if (showCenter || showGrid) {
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+      // OBS output mirrors participant avatar transforms but never includes
+      // editor-only composition guides. Grid and center dummy remain preview aids.
       visible.forEach(member => {
         const entry = playerRenderers.get(member.user_id);
         if (entry && !entry.direct) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
       });
-      // Guide is an overlay layer; it must sit above opaque member backgrounds.
-      if (showCenter) drawCenterGuide(ctx, canvas.width, canvas.height);
-      if (showGrid) drawCompositionGrid(ctx, canvas.width, canvas.height);
     }
   }
   compositeRaf = requestAnimationFrame(drawCompositeFrame);
