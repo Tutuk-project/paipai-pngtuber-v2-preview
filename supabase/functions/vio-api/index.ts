@@ -1255,10 +1255,17 @@ Deno.serve(async (req) => {
       if (Number.isFinite(storedSize) && storedSize !== size) return json({ ok: false, error: "Uploaded accessory size does not match its metadata." }, 409);
       const storedMime = String(storedFile.metadata?.mimetype || storedFile.metadata?.contentType || "");
       if (storedMime && storedMime !== mime) return json({ ok: false, error: "Uploaded accessory MIME type does not match its metadata." }, 409);
+      // sort_order is a 32-bit ordering field, not a timestamp. Date.now()
+      // overflows PostgreSQL integer (the previous upload failure on Android).
+      const { data: lastAccessory, error: orderError } = await db.from("vio_character_accessories")
+        .select("sort_order").eq("user_id", user.id).eq("character_id", characterId)
+        .order("sort_order", { ascending: false }).limit(1).maybeSingle();
+      if (orderError) throw orderError;
+      const nextSortOrder = Math.max(0, Number(lastAccessory?.sort_order) || 0) + 1;
       const { data: accessory, error } = await db.from("vio_character_accessories").insert({
         user_id: user.id, character_id: characterId, name, storage_path: storagePath,
         bucket_id: "vio-studio-assets", mime_type: mime, size_bytes: size,
-        sort_order: Date.now()
+        sort_order: nextSortOrder
       }).select("id").single();
       if (error) throw error;
       const auditWarning = await auditWithWarning(db, user.id, user.id, "character_accessory_uploaded", {
