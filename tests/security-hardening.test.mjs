@@ -64,7 +64,7 @@ test("accessories are included in collaboration and OBS snapshots and rendered b
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");
   const renderer = read("src/avatar-renderer.js");
-  assert.ok(edge.includes("vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order)"));
+  assert.ok(edge.includes("vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order)"));
   assert.ok(edge.includes("accessories: accessories.filter(Boolean)"));
   assert.ok(app.includes("avatarRenderer.setAccessories(characterAccessories)"));
   assert.ok(overlay.includes("renderer.setAccessories(accessories)"));
