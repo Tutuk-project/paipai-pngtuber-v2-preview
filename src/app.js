@@ -62,8 +62,13 @@ function setBadge(text, live = false) {
 }
 
 function showView(id) {
-  for (const viewId of viewIds) $(viewId).hidden = viewId !== id;
-  $("topRoomButton").hidden = !(currentUser && id === "editorView");
+  // A missing optional view must not interrupt navigation to the main workspace.
+  for (const viewId of viewIds) {
+    const view = $(viewId);
+    if (view) view.hidden = viewId !== id;
+  }
+  const roomButton = $("topRoomButton");
+  if (roomButton) roomButton.hidden = !(currentUser && id === "editorView");
 }
 
 function allowedMenus(role) {
@@ -72,24 +77,30 @@ function allowedMenus(role) {
 
 function renderNavigation() {
   const nav = $("navigation");
-  nav.replaceChildren();
-  for (const item of allowedMenus(currentUser?.role || "guest")) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `nav-item ${activeMenu === item.id ? "active" : ""}`;
-    button.dataset.menu = item.id;
-    button.innerHTML = `<span class="nav-icon" aria-hidden="true">${item.icon}</span><span class="nav-label">${item.label}</span>`;
-    button.title = item.label;
-    button.addEventListener("click", () => selectMenu(item.id));
-    nav.append(button);
+  if (nav) {
+    nav.replaceChildren();
+    for (const item of allowedMenus(currentUser?.role || "guest")) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `nav-item ${activeMenu === item.id ? "active" : ""}`;
+      button.dataset.menu = item.id;
+      button.innerHTML = `<span class="nav-icon" aria-hidden="true">${item.icon}</span><span class="nav-label">${item.label}</span>`;
+      button.title = item.label;
+      button.addEventListener("click", () => selectMenu(item.id));
+      nav.append(button);
+    }
   }
+
+  // Logout is already in .sidebar-bottom in index.html. Never move it between
+  // DOM parents during rendering: doing so can break a partially updated layout.
   const logoutButton = $("logoutButton");
-  logoutButton.hidden = !currentUser;
-  // Keep the original sidebar DOM structure. Responsive navigation is CSS-only.
-  $("sidebar").querySelector(".sidebar-bottom").append(logoutButton);
-  $("accountName").textContent = currentUser?.username || "Not signed in";
-  $("accountRole").textContent = currentUser?.role || "Guest";
-  $("accountInitial").textContent = (currentUser?.username || "?").slice(0, 1).toUpperCase();
+  if (logoutButton) logoutButton.hidden = !currentUser;
+  const accountName = $("accountName");
+  if (accountName) accountName.textContent = currentUser?.username || "Not signed in";
+  const accountRole = $("accountRole");
+  if (accountRole) accountRole.textContent = currentUser?.role || "Guest";
+  const accountInitial = $("accountInitial");
+  if (accountInitial) accountInitial.textContent = (currentUser?.username || "?").slice(0, 1).toUpperCase();
 }
 
 function selectMenu(menuId) {
@@ -99,18 +110,34 @@ function selectMenu(menuId) {
   }
   if (menuId === "admin" && currentUser?.role !== "admin") return;
   if (menuId === "tester" && !["admin", "tester"].includes(currentUser?.role)) return;
+
   activeMenu = menuId;
-  renderNavigation();
+  const meta = menus.find(item => item.id === menuId);
+
+  // Reveal the requested view before touching optional navigation/settings UI.
+  // This prevents a sidebar DOM mismatch from leaving the whole app blank.
   if (menuId === "admin") {
     showView("adminView");
+    const pageTitle = $("pageTitle");
+    if (pageTitle) pageTitle.textContent = "Admin Control Center";
+    renderNavigation();
     loadAdminOverview();
-    $("pageTitle").textContent = "Admin Control Center";
     return;
   }
+
   showView("editorView");
-  const meta = menus.find(item => item.id === menuId);
-  $("pageTitle").textContent = menuId === "profile" ? "Avatar Preview" : meta?.title || "Workspace";
-  renderSettings(menuId);
+  const pageTitle = $("pageTitle");
+  if (pageTitle) pageTitle.textContent = menuId === "profile" ? "Avatar Preview" : meta?.title || "Workspace";
+  renderNavigation();
+
+  try {
+    renderSettings(menuId);
+  } catch (error) {
+    console.error("Vio Studio settings render error:", error);
+    const content = $("settingsContent");
+    if (content) content.textContent = `Panel settings gagal dimuat: ${error.message}`;
+    showToast(`Workspace terbuka, tetapi panel pengaturan gagal dimuat: ${error.message}`, "error");
+  }
 }
 
 function settingField(label, id, value, hint = "", type = "text") {
@@ -933,8 +960,9 @@ async function login(username, pairingCode) {
     await loadActiveCharacterAssets();
   } catch (assetError) { console.info("No saved character assets yet:", assetError.message); }
   $("footerSession").textContent = `Session: ${currentUser.username} · ${currentUser.role}`;
-  $("loginGate").hidden = true;
-  renderNavigation();
+  const loginGate = $("loginGate");
+  if (loginGate) loginGate.hidden = true;
+  // selectMenu renders navigation once, after making the editor visible.
   selectMenu("profile");
   await restoreSavedRoom();
 }
