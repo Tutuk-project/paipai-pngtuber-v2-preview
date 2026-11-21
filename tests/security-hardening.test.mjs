@@ -192,7 +192,7 @@ test("OBS overlay automatically requests microphone access for Solo and Collabor
   const overlay = read("src/overlay.js");
   const html = read("overlay.html");
   const audio = read("src/audio-engine.js");
-  assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\\.js\\?v=//);
+  assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\.js\?v=/);
   assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
   assert.match(audio, /navigator\.mediaDevices\?\.getUserMedia/);
   assert.match(overlay, /Creator-side state broadcasts/);
@@ -406,7 +406,7 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
   const audio = read("src/audio-engine.js");
   const overlay = read("src/overlay.js");
   const html = read("index.html");
-  assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\\.js\\?v=//);
+  assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\.js\?v=/);
   assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js\?v=/);
   assert.match(app, /function drawPreview\(\)/);
   assert.match(app, /async function generateOverlayLink\(/);
