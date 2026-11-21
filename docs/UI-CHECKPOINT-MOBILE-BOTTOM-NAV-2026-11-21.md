@@ -52,3 +52,61 @@ The bottom-navigation design experiment is rolled back. The app should be tested
 - CSS brace/string/comment balance passed.
 - Five dock target IDs and cache-busting references were verified against the deployed HTML.
 - GitHub Actions runtime result and real-device visual QA remain to be confirmed after deployment.
+
+
+## Checkpoint update — 2026-11-21, post-redesign verification plan
+
+### Repository state
+- Repository: `Tutuk-project/paipai-pngtuber-v2-preview`
+- Branch: `main`
+- Latest verified commit: `9027b60442de490bf562a0cafa47aa5ed0366898` — `Bust mobile navigation JavaScript cache after final wiring`
+- CSS cache key: `app.css?v=20261121-cyber-ui-1`
+- JavaScript cache key: `app.js?v=20261121-cyber-ui-2`
+
+### Current UI implementation
+- The V+ Creator Studio mobile redesign is committed. It uses the supplied Creator Studio mobile ZIP as a visual reference only; the prototype's static mock avatar and runtime were not copied.
+- Mobile dock actions are wired to existing application functionality:
+  - Stage: scrolls to the existing avatar preview; if currently in Admin, it returns to the Creator view first.
+  - Background: opens the existing Visual Effect+ settings and focuses the Background accordion.
+  - Audio: opens the existing microphone settings.
+  - Effects: opens the existing Visual Effect+ settings and focuses the Makeup/effect accordion.
+  - Profile: opens existing account profile settings.
+- Character & Assets, Admin Center, Test Lab, and Logout remain reachable from the account/navigation drawer.
+- Collaboration room mode hides the mobile dock so the existing landscape room stage and controls remain unobstructed.
+- Mobile presentation includes neon cyan/purple/magenta colors, frosted cards, responsive square preview, mic/OBS controls, microphone meter, avatar scale controls, and safe-area-aware floating navigation.
+
+### Engine and system preservation
+The following production files were checked and remained unchanged during this UI redesign:
+- `src/avatar-renderer.js`: `33c8d059cc071da44bc5f41976718f2fdea79049`
+- `src/audio-engine.js`: `539601a2d264a68bb4cae1d7166a1fdb25935913`
+- `src/overlay.js`: `4ee8e82e046649672903340baf9433f47f137d2e`
+- Supabase Edge Function `supabase/functions/vio-api/index.ts`: `557a78c877a1134836ff9e5b312c88160b44c269`
+- No renderer, audio engine, OBS overlay runtime, or Edge Function logic was intentionally modified by this UI-only work.
+
+### Source-level verification
+- `src/app.js` syntax parsing passed.
+- `tests/security-hardening.test.mjs` syntax parsing passed after correcting a malformed assertion.
+- CSS brace/string/comment balance passed.
+- Five mobile dock targets, dock handlers, settings accordion IDs, Collaboration dock hiding, and asset cache keys were verified.
+- These are source checks, not a substitute for browser runtime or visual QA.
+
+### GitHub Actions observation
+The user's latest screenshot shows:
+- Preview Validation run #146, commit `9027b60`: green.
+- Preview Validation run #145, commit `02ef4fd`: green.
+- Earlier intermediate runs #142, #143, and #144: red.
+- Other displayed runs for the redesign/documentation and regression additions were green.
+- Treat the red runs as failures on intermediate commits, not proof that the latest `main` source is failing. The screenshot confirms #146 and #145 are green; it does not independently prove runtime visual correctness.
+
+### Next action: test first, do not change engine
+Do not make further renderer/audio/OBS/backend changes until the current UI and deployed build are tested on the user's POCO X7 Pro using Chrome Android.
+
+Test sequence:
+1. Mobile UI: header, dock, account drawer, scrolling, safe-area spacing, responsive layout, and no clipped/overlapping controls.
+2. Avatar Renderer: upload avatar, expression switching, Idle/Talking, blink, accessories, and scale.
+3. Audio Engine: microphone permission, input selection/activation, voice-level meter, and talking expression.
+4. Visual Effect+: background, filters, stroke, shadow, bloom, and distortion.
+5. OBS: generate link, ensure output is clean with no editor menus, and verify avatar/audio behavior.
+6. Collaboration: room entry, avatar synchronization, room controls, and landscape stage; ensure mobile dock stays hidden.
+
+After each test, classify any failure by layer (UI, renderer, audio, effects/settings, OBS overlay, or Collaboration) and only then make a narrowly scoped fix. Do not infer that a green workflow proves the app is visually correct on-device.
