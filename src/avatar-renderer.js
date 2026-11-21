@@ -16,6 +16,18 @@ const DEFAULTS = {
   effects: { enabled: false, stickerEffectsEnabled: true, ...structuredClone(EFFECT_DEFAULTS) }
 };
 
+export function compareRoomMembers(a = {}, b = {}) {
+  if (!!a.is_host !== !!b.is_host) return a.is_host ? -1 : 1;
+  const joinedA = a.joined_at ? Date.parse(a.joined_at) : Number.POSITIVE_INFINITY;
+  const joinedB = b.joined_at ? Date.parse(b.joined_at) : Number.POSITIVE_INFINITY;
+  if (joinedA !== joinedB) return joinedA - joinedB;
+  return String(a.user_id || "").localeCompare(String(b.user_id || ""));
+}
+
+export function sortRoomMembers(members = []) {
+  return [...members].sort(compareRoomMembers);
+}
+
 export function resolveRoomAvatarPreferences(profile = {}, overrides = {}, stageWidth = 1920, stageHeight = 1080, memberIndex = 0, memberCount = 1) {
   const width = Math.max(1, Number(stageWidth) || 1920);
   const height = Math.max(1, Number(stageHeight) || 1080);
@@ -374,6 +386,10 @@ export class AvatarRenderer {
   blinkDelay() {
     const rate = Math.max(0.5, Math.min(12, Number(this.preferences.blinkRate) || 4));
     return 60000 / rate * (0.7 + Math.random() * 0.6);
+  }
+
+  drawBackgroundTo(ctx, W, H) {
+    this.drawBackground(ctx, W, H);
   }
 
   drawBackground(ctx, W, H) {
