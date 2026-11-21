@@ -226,7 +226,8 @@ test("generated Solo and Collaboration OBS links never enable editor controls", 
   const start = app.indexOf("async function generateOverlayLink(");
   const end = app.indexOf("async function loadAdminOverview", start);
   const generator = app.slice(start, end);
-  assert.ok(generator.includes("url.hash = new URLSearchParams"));
+  assert.ok(generator.includes('url.searchParams.set("room", result.room_id)'));
+  assert.ok(generator.includes('url.searchParams.set("token", result.overlay_token)'));
   assert.ok(!generator.includes('searchParams.set("controls", "1")'));
   assert.ok(!html.includes('id="copyOverlayControlsLink"'));
   assert.match(html, /id="copyOverlayLink"/);
