@@ -224,12 +224,12 @@ function drawCompositeFrame(now) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const visible = members.slice(0, 4);
     if (visible.length) {
+      if (centerGuideEnabled || visible.some(member => member.overrides?.showCenterGuide === true)) drawCenterGuide(ctx, canvas.width, canvas.height);
       visible.forEach(member => {
         const entry = playerRenderers.get(member.user_id);
         if (entry && !entry.direct) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
       });
       if (gridEnabled || visible.some(member => member.overrides?.showGrid === true)) drawCompositionGrid(ctx, canvas.width, canvas.height);
-      if (centerGuideEnabled || visible.some(member => member.overrides?.showCenterGuide === true)) drawCenterGuide(ctx, canvas.width, canvas.height);
     }
   }
   compositeRaf = requestAnimationFrame(drawCompositeFrame);
