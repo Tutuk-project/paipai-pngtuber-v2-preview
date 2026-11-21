@@ -129,6 +129,7 @@ export class AvatarRenderer {
     this.renderCtx = this.renderCanvas.getContext("2d", { alpha: true });
     this.assets = {};
     this.images = new Map();
+    this.lastGoodAvatarImage = null;
     this.effectCache = new WeakMap();
     this.accessories = [];
     this.state = "idle";
@@ -159,6 +160,9 @@ export class AvatarRenderer {
 
   setAssets(assets = {}) {
     this.assets = { ...assets };
+    // Preserve the last decoded avatar while replacement expression images
+    // load. Reset only when the character has no image assets at all.
+    if (!Object.values(this.assets).some(Boolean)) this.lastGoodAvatarImage = null;
     Object.values(this.assets).forEach(src => this.image(src));
     this.pruneImageCache();
     this.drawOnce();
@@ -292,16 +296,28 @@ export class AvatarRenderer {
     ].filter(Boolean))].map(src => this.image(src)).filter(Boolean);
     // Prefer a decoded expression asset, but keep the avatar visible with any
     // decoded fallback while a state-specific image is loading or unavailable.
-    const image = candidates.find(item => item.complete && item.naturalWidth)
-      || candidates.find(item => !item.complete);
+    const decodedAvatar = candidates.find(item => item.complete && item.naturalWidth) || null;
+    const lastGood = this.lastGoodAvatarImage?.complete && this.lastGoodAvatarImage.naturalWidth
+      ? this.lastGoodAvatarImage
+      : null;
+    const pendingAvatar = candidates.some(item => !item.complete);
+    const image = decodedAvatar || lastGood || candidates.find(item => !item.complete) || null;
     const hasAvatar = Boolean(image?.complete && image.naturalWidth);
-    if (hasAvatar) this.drawAvatar(ctx, image, W, H, now, expression);
+    if (hasAvatar) {
+      this.drawAvatar(ctx, image, W, H, now, expression);
+      if (decodedAvatar) this.lastGoodAvatarImage = decodedAvatar;
+    }
     this.drawAccessories(ctx, W, H, now, expression);
+    const hasAccessories = this.accessories.some(item => item.image?.complete && item.image.naturalWidth);
     const hasOpaqueBackground = this.preferences.background?.mode && this.preferences.background.mode !== "transparent";
-    if (hasAvatar || this.accessories.some(item => item.image?.complete && item.image.naturalWidth) || hasOpaqueBackground) {
-      const output = canvas.getContext("2d", { alpha: true });
+    const output = canvas.getContext("2d", { alpha: true });
+    if (hasAvatar || hasAccessories || hasOpaqueBackground) {
       output.clearRect(0, 0, outputWidth, outputHeight);
       output.drawImage(this.renderCanvas, 0, 0, outputWidth, outputHeight);
+    } else if (!pendingAvatar && !this.lastGoodAvatarImage) {
+      // No assets are loading and no last-good frame exists: clear a genuinely
+      // empty avatar. During expression transitions, leave the previous frame.
+      output.clearRect(0, 0, outputWidth, outputHeight);
     }
   }
 
