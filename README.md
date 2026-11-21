@@ -129,3 +129,7 @@ A modular `src/avatar-renderer.js` is wired into the v2 editor and OBS overlay. 
 
 ## Latest development checkpoint
 - [Checkpoint 48 — Solo OBS render stability, Collaboration landscape, and composition grid](docs/CHECKPOINT-48-2026-11-21.md)
+
+
+## Latest development checkpoint
+- [Checkpoint 49 — Realtime fallback, mic controls, landscape Collaboration, and center guide](docs/CHECKPOINT-49-2026-11-21.md)
