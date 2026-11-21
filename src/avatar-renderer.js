@@ -16,6 +16,23 @@ const DEFAULTS = {
   effects: { enabled: false, stickerEffectsEnabled: true, ...structuredClone(EFFECT_DEFAULTS) }
 };
 
+export function resolveRoomAvatarPreferences(profile = {}, overrides = {}, stageWidth = 1920, stageHeight = 1080, memberIndex = 0, memberCount = 1) {
+  const width = Math.max(1, Number(stageWidth) || 1920);
+  const height = Math.max(1, Number(stageHeight) || 1080);
+  const count = Math.max(1, Number(memberCount) || 1);
+  const defaultX = (Number(memberIndex) - (count - 1) / 2) * 34;
+  const layoutX = Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : defaultX;
+  const clampPosition = value => Math.max(-100, Math.min(100, Number(value) || 0));
+  const scale = Number(overrides.scale ?? profile.scale ?? 1);
+  return {
+    ...profile,
+    scale: Number.isFinite(scale) ? scale : 1,
+    avatarScalePercent: overrides.scale != null ? undefined : profile.avatarScalePercent,
+    offsetX: clampPosition(layoutX) * width * 0.004,
+    offsetY: clampPosition(overrides.y) * height * 0.0035
+  };
+}
+
 export function averageVisibleColor(pixels, fallback = "#ffd7b8") {
   let red = 0, green = 0, blue = 0, count = 0;
   for (let i = 0; i < pixels.length; i += 16) {
@@ -202,6 +219,17 @@ export class AvatarRenderer {
       this.setBackgroundVideo(null);
       this.setBackgroundImage(background.mode === "image" ? background.src || null : null);
     }
+    this.drawOnce();
+  }
+
+  setRoomLayout(layout = {}) {
+    const next = { ...this.preferences };
+    for (const key of ["scale", "offsetX", "offsetY"]) {
+      const value = Number(layout[key]);
+      if (Number.isFinite(value)) next[key] = value;
+    }
+    if (Object.hasOwn(layout, "avatarScalePercent")) next.avatarScalePercent = layout.avatarScalePercent;
+    this.preferences = next;
     this.drawOnce();
   }
 

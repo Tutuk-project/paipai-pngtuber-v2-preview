@@ -291,7 +291,7 @@ test("Collaboration composition grid is a Creator preview guide and is excluded 
 test("OBS overlay keeps working when Realtime channel subscription fails", () => {
   const overlay = read("src/overlay.js");
   assert.match(overlay, /Realtime unavailable; using polling fallback/);
-  assert.match(overlay, /realtimeConnected \? 10000 : 1000/);
+  assert.match(overlay, /realtimeConnected \? 2500 : 1000/);
   assert.doesNotMatch(overlay, /reject\(new Error\(\`Realtime channel error/);
 });
 
@@ -445,14 +445,16 @@ test("AvatarRenderer preserves the last decoded PNG while a new expression is lo
 });
 
 
-test("Collaboration overlay uses the same avatar layout positions as the Creator preview", () => {
+test("Collaboration Creator and OBS use one canonical room-layout transform", () => {
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");
-  assert.match(app, /offsetX: Math\.max\(-100, Math\.min\(100, Object\.hasOwn\(overrides, "x"\)/);
-  assert.match(app, /offsetY: Math\.max\(-100, Math\.min\(100, Number\(overrides\.y\) \|\| 0\)\) \* playerHeight \* 0\.0035/);
-  assert.match(overlay, /const layoutX = Object\.hasOwn\(overrides, "x"\)/);
-  assert.match(overlay, /preferences\.offsetX = Math\.max\(-100, Math\.min\(100, layoutX\)\) \* width \* 0\.004/);
-  assert.match(overlay, /preferences\.offsetY = Math\.max\(-100, Math\.min\(100, Number\(overrides\.y\) \|\| 0\)\) \* canvas\.height \* 0\.0035/);
+  const renderer = read("src/avatar-renderer.js");
+  assert.match(app, /resolveRoomAvatarPreferences\(profile, overrides, playerWidth, playerHeight, index, visible\.length\)/);
+  assert.match(overlay, /resolveRoomAvatarPreferences\(profile, overrides, width, canvas\.height, memberIndex, members\.length\)/);
+  assert.match(renderer, /export function resolveRoomAvatarPreferences\(/);
+  assert.match(renderer, /setRoomLayout\(layout = \{\}\)/);
+  assert.doesNotMatch(app, /offsetX: Math\.max\(-100/);
+  assert.doesNotMatch(overlay, /preferences\.offsetX = Math\.max\(-100/);
 });
 
 

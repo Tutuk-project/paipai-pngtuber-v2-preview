@@ -1,4 +1,4 @@
-import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-live-sync-2";
+import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-collab-position-fix-1";
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
 
 let config;
@@ -58,14 +58,11 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     entry = null;
   }
   if (!entry) {
-    // Solo has one participant: draw straight into the visible OBS canvas.
-    // This avoids rendering an animated offscreen canvas that is only copied
-    // when the microphone changes state.
     const playerCanvas = drawDirectlyToStage ? canvas : document.createElement("canvas");
     playerCanvas.width = Math.max(1, Math.round(stageWidth));
     playerCanvas.height = canvas.height;
     const renderer = new AvatarRenderer(playerCanvas);
-    entry = { canvas: playerCanvas, renderer, direct: drawDirectlyToStage };
+    entry = { canvas: playerCanvas, renderer, direct: drawDirectlyToStage, profileKey: "", assetsKey: "", accessoriesKey: "" };
     playerRenderers.set(member.user_id, entry);
   }
   const { renderer, canvas: playerCanvas } = entry;
@@ -74,24 +71,32 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     playerCanvas.width = width;
     playerCanvas.height = canvas.height;
   }
+  const profile = member.preferences || {};
   const overrides = member.overrides || {};
-  const layoutX = Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (memberIndex - (members.length - 1) / 2) * 34;
-  const preferences = {
-    ...(member.preferences || {}),
-    scale: overrides.scale ?? member.preferences?.scale ?? 1,
-    avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent
-  };
-  preferences.offsetX = Math.max(-100, Math.min(100, layoutX)) * width * 0.004;
-  preferences.offsetY = Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * canvas.height * 0.0035;
-  // Apply the complete member profile before starting the direct Solo canvas loop.
-  // setPreferences configures both signed image and video backgrounds.
-  renderer.setPreferences(preferences);
-  renderer.setAssets(member.assets || {});
-  renderer.setAccessories(member.accessories || []);
+  const preferences = resolveRoomAvatarPreferences(profile, overrides, width, canvas.height, memberIndex, members.length);
+  const profileKey = JSON.stringify(profile);
+  const assets = member.assets || {};
+  const assetsKey = JSON.stringify(assets);
+  const accessories = member.accessories || [];
+  const accessoriesKey = JSON.stringify(accessories);
+  if (entry.profileKey !== profileKey) {
+    renderer.setPreferences(profile);
+    entry.profileKey = profileKey;
+  }
+  if (entry.assetsKey !== assetsKey) {
+    renderer.setAssets(assets);
+    entry.assetsKey = assetsKey;
+  }
+  if (entry.accessoriesKey !== accessoriesKey) {
+    renderer.setAccessories(accessories);
+    entry.accessoriesKey = accessoriesKey;
+  }
+  renderer.setRoomLayout(preferences);
   renderer.setState(states.get(member.user_id) || member.state || "idle");
   if (!renderer.running) renderer.start();
   return entry;
 }
+
 
 function updateLocalMicState(state) {
   if (!localMicUserId || !["idle", "talking"].includes(state)) return;
@@ -201,18 +206,18 @@ function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
-  const slotWidth = canvas.width / visible.length;
-  visible.forEach(member => {
-    const entry = playerRenderers.get(member.user_id) || ensurePlayerRenderer(member, canvas.width, visible.indexOf(member));
+  visible.forEach((member, index) => {
+    const entry = ensurePlayerRenderer(member, canvas.width, index);
     entry.renderer.setState(states.get(member.user_id) || member.state || "idle");
   });
   if (roomPurpose === "personal_overlay" && visible.length === 1 && visible[0].user_id === localMicUserId) {
     if (compositeRaf) cancelAnimationFrame(compositeRaf);
     compositeRaf = 0;
-    return; // AvatarRenderer owns the visible canvas and its animation loop.
+    return;
   }
   if (!compositeRaf) compositeRaf = requestAnimationFrame(drawCompositeFrame);
 }
+
 
 async function pollOverlayState() {
   let result;
@@ -244,7 +249,6 @@ async function pollOverlayState() {
     const nextOverrides = item.overrides || {};
     if (JSON.stringify(member.overrides || {}) !== JSON.stringify(nextOverrides)) {
       member.overrides = nextOverrides;
-      ensurePlayerRenderer(member, canvas.width, members.indexOf(member));
       layoutChanged = true;
     }
   }
@@ -362,10 +366,7 @@ async function boot() {
         if (seq && seq <= (layoutSequences.get(payload.user_id) || 0)) return;
         if (seq) layoutSequences.set(payload.user_id, seq);
         const member = members.find(item => item.user_id === payload.user_id);
-        if (member) {
-          member.overrides = { ...(member.overrides || {}), ...payload.overrides };
-          ensurePlayerRenderer(member, canvas.width, members.indexOf(member));
-        }
+        if (member) member.overrides = { ...(member.overrides || {}), ...payload.overrides };
         render();
       })
       .on("broadcast", { event: "member-assets-updated" }, () => {
@@ -396,7 +397,7 @@ async function boot() {
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
       pollOverlayState().catch(error => { if (debugMode) setStatus("Polling overlay gagal: " + error.message, true); });
-    }, realtimeConnected ? 10000 : 1000);
+    }, realtimeConnected ? 2500 : 1000);
     if (assetRefreshTimer) clearInterval(assetRefreshTimer);
     assetRefreshTimer = setInterval(() => {
       refreshMembers().catch(error => { if (debugMode) setStatus("Refresh aset overlay gagal: " + error.message, true); });

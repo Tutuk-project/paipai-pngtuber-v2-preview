@@ -1,5 +1,5 @@
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
-import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-ui-reorg-1";
+import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-collab-position-fix-1";
 
 const $ = (id) => document.getElementById(id);
 const viewIds = ["loginGate", "editorView", "collaborationView", "adminView", "overlayView"];
@@ -38,6 +38,9 @@ let renderFrame = 0;
 let lastRoomStageFrame = 0;
 let playerSequence = 0;
 let layoutSequence = 0;
+let roomLayoutSaveTimer = 0;
+let roomLayoutSaveInFlight = null;
+let lastPersistedRoomLayoutSignature = "";
 let activeSupportSession = null;
 let micEnabled = false;
 let generatedOverlayUrl = "";
@@ -1792,20 +1795,31 @@ function renderRoomControls(options = {}) {
       if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), [item.key]: value };
       output.textContent = item.format(value);
       if (item.key === "sensitivity" || item.key === "boostDb") audio?.setOptions({ [item.key]: value });
-      if (["scale", "x", "y"].includes(item.key)) {
+      const isLayoutControl = ["scale", "x", "y"].includes(item.key);
+      if (isLayoutControl) {
         renderRoomParticipants();
         schedulePlayerLayoutBroadcast();
+        scheduleRoomLayoutPersistence();
       }
     });
+    const isLayoutControl = ["scale", "x", "y"].includes(item.key);
+    const flushLayout = () => {
+      if (isLayoutControl) persistRoomLayout().catch(error => console.warn("Room layout save failed:", error));
+    };
+    if (isLayoutControl) {
+      range.addEventListener("pointerup", flushLayout);
+      range.addEventListener("touchend", flushLayout, { passive: true });
+      range.addEventListener("keyup", flushLayout);
+    }
     range.addEventListener("change", async () => {
       const value = Number(range.value);
       try {
-        await api("set_room_override", { room_id: currentRoom.id, overrides: { [item.key]: value } });
+        if (isLayoutControl) await persistRoomLayout();
+        else await api("set_room_override", { room_id: currentRoom.id, overrides: { [item.key]: value } });
         const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
         if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), [item.key]: value };
-        if (["scale", "x", "y"].includes(item.key)) await broadcastPlayerLayout();
       } catch (error) {
-        showToast(`${item.label} gagal disimpan: ${error.message}`, "error");
+        if (!isLayoutControl) showToast(`${item.label} gagal disimpan: ${error.message}`, "error");
       }
     });
     labelRow.append(label, output);
@@ -1899,6 +1913,44 @@ async function broadcastPlayerLayout() {
   await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid, showCenterGuide }, at: Date.now() } });
 }
 
+function roomLayoutSnapshot() {
+  return { scale: Number(roomOverrides.scale ?? 1), x: Number(roomOverrides.x ?? 0), y: Number(roomOverrides.y ?? 0) };
+}
+function roomLayoutSignature(snapshot = roomLayoutSnapshot()) { return JSON.stringify(snapshot); }
+
+async function persistRoomLayout() {
+  if (roomLayoutSaveTimer) { clearTimeout(roomLayoutSaveTimer); roomLayoutSaveTimer = 0; }
+  if (!currentRoom) return;
+  if (roomLayoutSaveInFlight) await roomLayoutSaveInFlight.catch(() => {});
+  const snapshot = roomLayoutSnapshot();
+  const signature = roomLayoutSignature(snapshot);
+  if (signature === lastPersistedRoomLayoutSignature) {
+    await broadcastPlayerLayout();
+    return;
+  }
+  const task = api("set_room_override", { room_id: currentRoom.id, overrides: snapshot });
+  roomLayoutSaveInFlight = task;
+  try {
+    await task;
+    lastPersistedRoomLayoutSignature = signature;
+    await broadcastPlayerLayout();
+  } finally {
+    if (roomLayoutSaveInFlight === task) roomLayoutSaveInFlight = null;
+  }
+}
+
+function scheduleRoomLayoutPersistence(delay = 400) {
+  if (!currentRoom) return;
+  if (roomLayoutSaveTimer) clearTimeout(roomLayoutSaveTimer);
+  roomLayoutSaveTimer = window.setTimeout(() => {
+    roomLayoutSaveTimer = 0;
+    persistRoomLayout().catch(error => {
+      showToast("Layout Collaboration gagal disimpan: " + error.message, "error");
+      console.warn("Room layout persistence failed:", error);
+    });
+  }, delay);
+}
+
 let layoutBroadcastTimer = 0;
 function schedulePlayerLayoutBroadcast() {
   if (!roomChannel || !currentRoom || layoutBroadcastTimer) return;
@@ -1932,6 +1984,8 @@ async function loadRoomMembers() {
       showCenterGuide: false
     };
     roomOverrides = { ...profileRoomDefaults, ...(ownMember?.overrides || {}) };
+    lastPersistedRoomLayoutSignature = JSON.stringify({ scale: Number(roomOverrides.scale ?? 1), x: Number(roomOverrides.x ?? 0), y: Number(roomOverrides.y ?? 0) });
+    if (roomLayoutSaveTimer) { clearTimeout(roomLayoutSaveTimer); roomLayoutSaveTimer = 0; }
     if (audio) {
       const nextDeviceId = String(roomOverrides.deviceId || "");
       const currentDeviceId = String(audio.options?.deviceId || "");
@@ -1974,14 +2028,13 @@ function renderRoomParticipants() {
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   canvas.style.aspectRatio = "16 / 9";
   const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const slotWidth = canvas.width;
   const tags = $("participantNames");
   tags.replaceChildren();
   const notice = $("roomStageNotice");
   $("participantCount").textContent = `${visible.length} / ${currentRoom?.capacity || 4} participants`;
 
   if (!visible.length) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (renderFrame) cancelAnimationFrame(renderFrame);
     renderFrame = 0;
     for (const entry of roomPreviewRenderers.values()) entry.renderer.stop();
@@ -2016,7 +2069,7 @@ function renderRoomParticipants() {
     let entry = roomPreviewRenderers.get(member.user_id);
     if (!entry) {
       const playerCanvas = document.createElement("canvas");
-      entry = { canvas: playerCanvas, renderer: new AvatarRenderer(playerCanvas) };
+      entry = { canvas: playerCanvas, renderer: new AvatarRenderer(playerCanvas), profileKey: "", assetsKey: "", accessoriesKey: "" };
       roomPreviewRenderers.set(member.user_id, entry);
     }
     const playerWidth = Math.max(1, Math.round(canvas.width));
@@ -2028,19 +2081,27 @@ function renderRoomParticipants() {
     const overrides = member.user_id === currentUser.id
       ? { ...(member.overrides || {}), ...roomOverrides }
       : (member.overrides || {});
-    const preferences = {
-      ...(member.preferences || {}),
-      scale: overrides.scale ?? member.preferences?.scale ?? 1,
-      avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent,
-      offsetX: Math.max(-100, Math.min(100, Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (index - (visible.length - 1) / 2) * 34)) * playerWidth * 0.004,
-      offsetY: Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * playerHeight * 0.0035
-    };
-    entry.renderer.setAssets(member.assets || {});
-    entry.renderer.setAccessories(member.accessories || []);
-    entry.renderer.setPreferences(preferences);
-    const background = preferences.background || {};
-    entry.renderer.setBackgroundImage(background.mode === "image" ? background.src : null);
-    entry.renderer.setBackgroundVideo(background.mode === "video" ? background.src : null);
+    const profile = member.preferences || {};
+    const preferences = resolveRoomAvatarPreferences(profile, overrides, playerWidth, playerHeight, index, visible.length);
+    const profileKey = JSON.stringify(profile);
+    const assets = member.assets || {};
+    const assetsKey = JSON.stringify(assets);
+    const accessories = member.accessories || [];
+    const accessoriesKey = JSON.stringify(accessories);
+    if (entry.profileKey !== profileKey) {
+      entry.renderer.setPreferences(profile);
+      entry.profileKey = profileKey;
+    }
+    if (entry.assetsKey !== assetsKey) {
+      entry.renderer.setAssets(assets);
+      entry.assetsKey = assetsKey;
+    }
+    if (entry.accessoriesKey !== accessoriesKey) {
+      entry.renderer.setAccessories(accessories);
+      entry.accessoriesKey = accessoriesKey;
+    }
+    // X/Y/scale changes must not rebuild the user's background image/video.
+    entry.renderer.setRoomLayout(preferences);
     entry.renderer.setState(member.state === "talking" ? "talking" : "idle");
     entry.renderer.start();
 
@@ -2132,6 +2193,7 @@ async function leaveRoom(restoreView = true) {
   if (renderFrame) cancelAnimationFrame(renderFrame);
   renderFrame = 0;
   if (layoutBroadcastTimer) { clearTimeout(layoutBroadcastTimer); layoutBroadcastTimer = 0; }
+  if (roomLayoutSaveTimer) { clearTimeout(roomLayoutSaveTimer); roomLayoutSaveTimer = 0; }
   for (const entry of roomPreviewRenderers.values()) entry.renderer.stop();
   roomPreviewRenderers.clear();
   currentRoom = null; roomMembers = []; remotePlayerStates.clear(); remotePlayerSequences.clear(); remoteLayoutSequences.clear(); roomPreviewImages.clear();

@@ -132,6 +132,7 @@ A modular `src/avatar-renderer.js` is wired into the v2 editor and OBS overlay. 
 
 
 ## Latest development checkpoint
+- [Checkpoint 50 — Collaboration OBS position parity and stable background compositing](docs/CHECKPOINT-50-2026-11-21.md)
 - [Checkpoint 49 — Realtime fallback, mic controls, landscape Collaboration, and center guide](docs/CHECKPOINT-49-2026-11-21.md)
 
 
