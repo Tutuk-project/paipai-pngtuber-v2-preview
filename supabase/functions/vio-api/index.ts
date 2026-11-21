@@ -1142,6 +1142,7 @@ Deno.serve(async (req) => {
     if (action === "set_room_override") {
       const user = requireUser();
       const roomId = String(body.room_id || "");
+      if (Object.hasOwn(body, "user_id") && body.user_id !== user.id) return json({ ok: false, error: "Room layout can only be written for the authenticated member." }, 403);
       const overrides = body.overrides && typeof body.overrides === "object" ? body.overrides as Json : {};
       const { data: member, error: memberError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
       if (memberError) throw memberError;
