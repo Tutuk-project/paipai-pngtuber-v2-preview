@@ -50,3 +50,25 @@
 - Do not expose grid/dummy guides in the OBS output.
 - Do not modify Offline v1.7 RELEASE or Online v1.0.
 - Do not apply v2 migrations or Edge Functions to the production Supabase project.
+
+
+## Follow-up execution — 21 November 2026
+
+- Confirmed the Development project is `vio-studio-v2-dev` (`nbpqnwjxavuhpiuntcep`). The separate `paipai-pngtuber` project was not modified.
+- Deployed `vio-api` to Development only. Deployment is ACTIVE at version 15 with `verify_jwt=true`.
+- Retrieved the deployed function after deployment and confirmed the active source no longer inserts millisecond timestamps into `sort_order`; it queries the highest existing per-character integer and appends the next value.
+- Queried PostgreSQL metadata: `vio_character_accessories.sort_order` remains `integer/int4`, which is correct for the bounded ordering value.
+- Updated the regression suite to match the requested behavior: the mobile dock has five items (Audio, Visual +, Avatar, Aksesoris, About); the Creator preview retains grid/center dummy guides; OBS Collaboration output remains transparent and excludes those editor-only guides.
+- Corrected the Background upload success path so it stays in Visual + instead of switching back to Avatar.
+- Changed the mobile dock CSS to five columns and cache-busted the stylesheet and app script.
+- GitHub Actions validation for commit `aa0b2ff760399dc55eda630da002bd439f67ac87`: 105 tests passed, 0 failed, 0 skipped. Preview validation also passed.
+- GitHub Pages deployment for that commit was still running at the time this checkpoint note was prepared; verify the final workflow conclusion before treating the public preview as deployed.
+- Runtime upload test for PNG/WebP and real-time OBS Browser Source test still require the user's authenticated Android Chrome session and an already-generated room link. Those tests cannot be honestly marked passed from static CI.
+
+## Remaining device verification
+
+1. Hard-refresh the preview on Android Chrome after Pages deployment completes.
+2. Upload one PNG and one WebP accessory, confirm they remain visible after refresh, and test dragging.
+3. Keep an existing Collaboration OBS URL open; drag X/Y/scale and confirm the character moves without regenerating the URL.
+4. Confirm grid and center dummy appear in Creator preview only, not in OBS.
+5. Confirm background upload returns to Visual + and the saved background remains after refresh.
