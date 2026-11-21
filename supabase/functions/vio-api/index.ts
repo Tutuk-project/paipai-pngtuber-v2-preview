@@ -1146,11 +1146,11 @@ Deno.serve(async (req) => {
       const { data: member, error: memberError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
       if (memberError) throw memberError;
       if (!member) return json({ ok: false, error: "Not a room member." }, 403);
-      const allowed = ["scale", "x", "y", "sensitivity", "boostDb", "deviceId", "showGrid"];
+      const allowed = ["scale", "x", "y", "sensitivity", "boostDb", "deviceId", "showGrid", "showCenterGuide"];
       const clean: Json = {};
       for (const key of allowed) {
         if (!Object.hasOwn(overrides, key)) continue;
-        if (key === "showGrid") {
+        if (key === "showGrid" || key === "showCenterGuide") {
           if (typeof overrides[key] !== "boolean") return json({ ok: false, error: "showGrid must be a boolean." }, 400);
           clean[key] = overrides[key];
           continue;
