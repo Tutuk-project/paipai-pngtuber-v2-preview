@@ -336,6 +336,7 @@ async function pollOverlayState() {
     const nextOverrides = item.overrides || {};
     if (JSON.stringify(member.overrides || {}) !== JSON.stringify(nextOverrides)) {
       member.overrides = nextOverrides;
+      member.overrides_updated_at = item.updated_at || null;
       layoutChanged = true;
     }
   }
@@ -403,6 +404,7 @@ async function refreshMembers() {
 async function boot() {
   try {
     if (!canvas || !ctx) throw new Error("Canvas OBS tidak ditemukan di halaman overlay.");
+    initializeDebugHud();
     setStatus("Membaca kredensial overlay…");
     const configModule = await import("./config.js");
     config = configModule.VIO_CONFIG;
@@ -437,8 +439,6 @@ async function boot() {
       if (nextSession?.expires_at) authSessionStatus = "session · expires " + debugTime(nextSession.expires_at * 1000);
       renderDebugHud();
     });
-    initializeDebugHud();
-
     setStatus("Memuat peserta dan aset avatar…");
     await refreshMembers();
     // Every Solo and Collaboration overlay requests microphone access as soon
@@ -528,6 +528,8 @@ async function boot() {
         if (body?.details) message += ` · ${body.details}`;
       } catch { /* Keep the SDK message if the response is not JSON. */ }
     }
+    authSessionStatus = "boot error: " + message;
+    renderDebugHud();
     setStatus(`OBS OVERLAY ERROR: ${message}`, true);
   }
 }
