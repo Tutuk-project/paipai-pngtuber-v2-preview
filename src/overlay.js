@@ -1,4 +1,4 @@
-import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-collab-position-fix-1";
+import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-collab-asset-diagnostics-1";
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
 
 let config;
