@@ -76,7 +76,7 @@ function renderDebugHud() {
   });
   const pollMembers = lastPollResult?.members || [];
   debugHud.textContent = [
-    "VIO OBS DEBUG HUD · " + BUILD_ID,
+    "VIO OBS DEBUG HUD · " + BUILD_ID + " · module=" + (new URL(import.meta.url).searchParams.get("v") || "unversioned"),
     "Realtime: " + realtimeStatus + (realtimeLastError ? " · " + realtimeLastError : ""),
     "Last broadcast: " + (lastBroadcastReceived ? JSON.stringify(lastBroadcastReceived) : "none"),
     "Last poll: " + (lastPollResult ? JSON.stringify({ at: debugTime(lastPollResult.at), http_status: lastPollResult.httpStatus, error: lastPollResult.error, members: pollMembers }) : "none"),
@@ -334,6 +334,7 @@ async function pollOverlayState() {
       member.state = item.state;
     }
     const nextOverrides = item.overrides || {};
+    member.overrides_updated_at = item.overrides_updated_at || item.updated_at || member.overrides_updated_at || null;
     if (JSON.stringify(member.overrides || {}) !== JSON.stringify(nextOverrides)) {
       member.overrides = nextOverrides;
       member.overrides_updated_at = item.updated_at || null;
