@@ -1885,8 +1885,7 @@ function renderRoomControls(options = {}) {
     renderRoomControls();
     renderRoomParticipants();
     try {
-      await api("set_room_override", { room_id: currentRoom.id, overrides: { scale: 1, x: 0, y: 0 } });
-      await broadcastPlayerLayout();
+      await persistRoomLayout();
     } catch (error) {
       showToast(`Layout gagal direset: ${error.message}`, "error");
     }
@@ -1957,7 +1956,23 @@ async function broadcastPlayerState(state) {
 async function broadcastPlayerLayout() {
   if (!roomChannel || !currentRoom) return;
   const { scale, x, y, showGrid, showCenterGuide } = roomOverrides;
-  await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid, showCenterGuide }, at: Date.now() } });
+  const payload = { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid, showCenterGuide }, at: Date.now() };
+  const startedAt = Date.now();
+  try {
+    const result = await roomChannel.send({ type: "broadcast", event: "player-layout", payload });
+    console.info("[CollabLayout] broadcast result", {
+      status: result, member_id: payload.user_id, seq: payload.seq,
+      x: payload.overrides.x, y: payload.overrides.y, scale: payload.overrides.scale,
+      elapsed_ms: Date.now() - startedAt
+    });
+    if (result !== "ok") console.warn("[CollabLayout] broadcast did not return ok", result, payload);
+    return result;
+  } catch (error) {
+    console.error("[CollabLayout] broadcast error", {
+      member_id: payload.user_id, seq: payload.seq, overrides: payload.overrides, error
+    });
+    throw error;
+  }
 }
 
 function roomLayoutSnapshot() {
@@ -1977,10 +1992,26 @@ async function persistRoomLayout() {
   }
   const task = api("set_room_override", { room_id: currentRoom.id, overrides: snapshot });
   roomLayoutSaveInFlight = task;
+  const startedAt = Date.now();
   try {
-    await task;
+    const result = await task;
+    console.info("[CollabLayout] DB write result", {
+      ok: result?.ok === true,
+      room_id: currentRoom.id,
+      member_id: currentUser?.id,
+      overrides: snapshot,
+      returned_rows: result?.override ? [result.override] : [],
+      updated_at: result?.override?.updated_at || null,
+      elapsed_ms: Date.now() - startedAt
+    });
+    if (!result?.override) console.warn("[CollabLayout] DB write returned no override row", result);
     lastPersistedRoomLayoutSignature = signature;
     await broadcastPlayerLayout();
+  } catch (error) {
+    console.error("[CollabLayout] DB write failed", {
+      room_id: currentRoom?.id, member_id: currentUser?.id, overrides: snapshot, error
+    });
+    throw error;
   } finally {
     if (roomLayoutSaveInFlight === task) roomLayoutSaveInFlight = null;
   }
