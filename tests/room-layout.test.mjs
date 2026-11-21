@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AvatarRenderer, compareRoomMembers, resolveRoomAvatarPreferences, sortRoomMembers } from "../src/avatar-renderer.js";
+import { AvatarRenderer, compareRoomMembers, mergeRoomMemberOverrides, resolveRoomAvatarLayouts, resolveRoomAvatarPreferences, resolveRoomBackgroundPreferences, sortRoomMembers } from "../src/avatar-renderer.js";
 
 test("room layout transform produces predictable stage-relative X/Y values", () => {
   const profile = { scale: 1.1, avatarScalePercent: 10, background: { mode: "image", src: "signed-bg" } };
@@ -98,30 +98,37 @@ test("join, leave and rejoin recompute rank without changing identity or host tr
   assert.equal(afterBRejoins.find(item => item.id === "host").layout.offsetX, 0);
 });
 
-test("collaboration stage and OBS draw one host background before transparent member sprites", async () => {
+test("Creator and OBS compose one host background beneath transparent participant sprites", async () => {
   const { readFile } = await import("node:fs/promises");
   const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
   const overlay = await readFile(new URL("../src/overlay.js", import.meta.url), "utf8");
   const appFrame = app.slice(app.indexOf("function drawRoomStageFrame("), app.indexOf("async function leaveRoom(", app.indexOf("function drawRoomStageFrame(")));
   const overlayFrame = overlay.slice(overlay.indexOf("function drawCompositeFrame("), overlay.indexOf("function render()", overlay.indexOf("function drawCompositeFrame(")));
-  assert.match(app, /const spriteProfile = \{ \.\.\.profile, background: \{ mode: "transparent" \} \}/);
-  assert.match(overlay, /roomPurpose === "collaboration" \? \{ \.\.\.profile, background: \{ mode: "transparent" \} \} : profile/);
+  assert.match(app, /resolveRoomAvatarLayouts\(roomMembers/);
+  assert.match(overlay, /resolveRoomAvatarLayouts\(orderedMembers/);
+  assert.match(app, /resolveRoomBackgroundPreferences\(roomMembers\)/);
+  assert.match(overlay, /resolveRoomBackgroundPreferences\(members\)/);
   assert.ok(appFrame.indexOf("roomBackgroundRenderer?.drawBackgroundTo") < appFrame.indexOf("ctx.drawImage(entry.canvas"));
   assert.ok(overlayFrame.indexOf("roomBackgroundRenderer?.drawBackgroundTo") < overlayFrame.indexOf("ctx.drawImage(entry.canvas"));
   assert.equal((appFrame.match(/roomBackgroundRenderer\?\.drawBackgroundTo/g) || []).length, 1);
   assert.equal((overlayFrame.match(/roomBackgroundRenderer\?\.drawBackgroundTo/g) || []).length, 1);
 });
 
-test("Creator local collaboration rendering reads the same DB override object as remote members", async () => {
+test("Creator and OBS apply the same DB-backed member overrides", async () => {
   const { readFile } = await import("node:fs/promises");
   const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
-  const start = app.indexOf("function renderRoomParticipants()");
-  const end = app.indexOf("function drawRoomCompositionGrid(", start);
-  const block = app.slice(start, end);
-  assert.match(block, /const overrides = member\.overrides \|\| \{\}/);
-  assert.doesNotMatch(block, /\.\.\.roomOverrides/);
+  const overlay = await readFile(new URL("../src/overlay.js", import.meta.url), "utf8");
+  const { resolveRoomAvatarLayouts } = await import("../src/avatar-renderer.js");
+  const members = [
+    { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z", overrides: { x: 0 } },
+    { user_id: "joiner", joined_at: "2026-11-21T04:01:00Z", overrides: { x: 24 } }
+  ];
+  const layouts = resolveRoomAvatarLayouts(members, 1920, 1080);
+  assert.deepEqual(layouts.map(item => item.preferences.offsetX), [0, 184.32]);
+  assert.match(app, /resolveRoomAvatarLayouts\(roomMembers/);
+  assert.match(overlay, /resolveRoomAvatarLayouts\(orderedMembers/);
+  assert.doesNotMatch(app.slice(app.indexOf("function renderRoomParticipants()"), app.indexOf("function drawRoomCompositionGrid(")), /\.\.\.roomOverrides/);
 });
-
 
 test("presence loss idles a collaboration member without deleting membership", async () => {
   const { readFile } = await import("node:fs/promises");
@@ -131,4 +138,48 @@ test("presence loss idles a collaboration member without deleting membership", a
   assert.match(app, /loadRoomMembers\(\);/);
   assert.match(overlay, /if \(!presentIds\.has\(member\.user_id\)\) member\.state = "idle"/);
   assert.doesNotMatch(app, /presenceState\(\)[\s\S]{0,240}roomMembers\.filter/);
+});
+
+
+test("canonical collaboration layouts produce stable 1-4 member X positions from database membership", () => {
+  const host = { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z" };
+  const participants = [1, 2, 3].map(n => ({ user_id: `member-${n}`, joined_at: `2026-11-21T04:0${n}:00Z`, state: "idle", online: true }));
+  const expected = { 1: [0], 2: [-130.56, 130.56], 3: [-261.12, 0, 261.12], 4: [-391.68, -130.56, 130.56, 391.68] };
+  for (let count = 1; count <= 4; count++) {
+    const members = [host, ...participants].slice(0, count);
+    const layouts = resolveRoomAvatarLayouts(members, 1920, 1080);
+    assert.deepEqual(layouts.map(item => item.preferences.offsetX), expected[count]);
+    assert.deepEqual(layouts.map(item => item.member.user_id), sortRoomMembers(members).map(item => item.user_id));
+  }
+});
+
+test("presence loss and reconnect never change resolved X for any database room member", () => {
+  const members = [
+    { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z", state: "talking", online: true },
+    { user_id: "b", joined_at: "2026-11-21T04:01:00Z", state: "idle", online: true },
+    { user_id: "c", joined_at: "2026-11-21T04:02:00Z", state: "talking", online: true },
+    { user_id: "d", joined_at: "2026-11-21T04:03:00Z", state: "idle", online: true }
+  ];
+  const project = list => resolveRoomAvatarLayouts(list, 1920, 1080).map(({ member, preferences }) => [member.user_id, preferences.offsetX]);
+  const before = project(members);
+  assert.deepEqual(project(members.map(member => ({ ...member, online: false, state: "idle" }))), before);
+  assert.deepEqual(project(members.map(member => ({ ...member, online: true, state: "talking" }))), before);
+});
+
+test("room override merge can only mutate the authenticated owner's member row", () => {
+  const members = [{ user_id: "alice", overrides: { x: 2, scale: 1 } }, { user_id: "bob", overrides: { x: 20, scale: 0.8 } }];
+  assert.equal(mergeRoomMemberOverrides(members, "alice", "bob", { x: 99 }), members);
+  const updated = mergeRoomMemberOverrides(members, "alice", "alice", { x: 12 });
+  assert.deepEqual(updated.map(member => member.overrides), [{ x: 12, scale: 1 }, { x: 20, scale: 0.8 }]);
+});
+
+test("collaboration background is resolved only from the host; participant sprite profiles stay transparent", () => {
+  const members = [
+    { user_id: "joiner", joined_at: "2026-11-21T04:01:00Z", preferences: { background: { mode: "image", src: "joiner-private-url" } } },
+    { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z", preferences: { background: { mode: "video", src: "host-signed-private-url", storage_path: "host/background.mp4", bucket_id: "vio-backgrounds" } } }
+  ];
+  assert.deepEqual(resolveRoomBackgroundPreferences(members), { background: members[1].preferences.background });
+  const layouts = resolveRoomAvatarLayouts(members, 1920, 1080);
+  assert.ok(layouts.every(item => item.spriteProfile.background.mode === "transparent"));
+  assert.ok(layouts.every(item => !JSON.stringify(item.spriteProfile).includes("joiner-private-url")));
 });
