@@ -243,6 +243,14 @@ test("renderer keeps a decoded fallback avatar visible when a state asset is una
   assert.match(renderer, /candidates\.find\(item => item\.complete && item\.naturalWidth\)/);
 });
 
+test("renderer invalidates the last-good frame when the active character asset set changes", () => {
+  const renderer = read("src/avatar-renderer.js");
+  assert.match(renderer, /nextAssetIdentity = JSON\.stringify/);
+  assert.match(renderer, /this\.assetIdentity !== nextAssetIdentity/);
+  assert.match(renderer, /this\.lastGoodAvatarImage = null/);
+  assert.match(renderer, /this\.ctx\.clearRect\(0, 0, this\.canvas\.width, this\.canvas\.height\)/);
+});
+
 test("editor preview stays square at 500x500 while OBS output dimensions remain profile-controlled", () => {
   const app = read("src/app.js");
   const preview = app.match(/function drawPreview\(\)[\s\S]*?function accessoryCanvasPoint/)?.[0] || "";
