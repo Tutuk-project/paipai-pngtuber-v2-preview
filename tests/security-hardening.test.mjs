@@ -192,7 +192,7 @@ test("OBS overlay automatically requests microphone access for Solo and Collabor
   const overlay = read("src/overlay.js");
   const html = read("overlay.html");
   const audio = read("src/audio-engine.js");
-  assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
+  assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\\.js\\?v=//);
   assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
   assert.match(audio, /navigator\.mediaDevices\?\.getUserMedia/);
   assert.match(overlay, /Creator-side state broadcasts/);
@@ -406,7 +406,7 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
   const audio = read("src/audio-engine.js");
   const overlay = read("src/overlay.js");
   const html = read("index.html");
-  assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
+  assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\\.js\\?v=//);
   assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js\?v=/);
   assert.match(app, /function drawPreview\(\)/);
   assert.match(app, /async function generateOverlayLink\(/);
@@ -449,4 +449,12 @@ test("Collaboration overlay uses the same avatar layout positions as the Creator
   assert.match(overlay, /const layoutX = Object\.hasOwn\(overrides, "x"\)/);
   assert.match(overlay, /preferences\.offsetX = Math\.max\(-100, Math\.min\(100, layoutX\)\) \* width \* 0\.004/);
   assert.match(overlay, /preferences\.offsetY = Math\.max\(-100, Math\.min\(100, Number\(overrides\.y\) \|\| 0\)\) \* canvas\.height \* 0\.0035/);
+});
+
+
+test("AudioEngine retries a suspended context on the first invisible user interaction", () => {
+  const audio = read("src/audio-engine.js");
+  assert.match(audio, /for \(const eventName of \["pointerdown", "touchend", "keydown"\]\)/);
+  assert.match(audio, /document\?\.addEventListener\?\.\(eventName, this\.resumeHandler, \{ capture: true, passive: true \}\)/);
+  assert.match(audio, /this\.resumeHandler = \(\) => \{ this\.resume\(\)/);
 });
