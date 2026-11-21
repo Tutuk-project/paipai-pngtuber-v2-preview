@@ -371,4 +371,4 @@ test("view switching tolerates missing optional DOM elements", () => {
   const showView = app.slice(showViewStart, showViewEnd);
   assert.match(showView, /const view = \$\(viewId\);[\s\S]*if \(view\) view\.hidden/);
   assert.match(showView, /if \(roomButton\) roomButton\.hidden/);
-});;
+};
