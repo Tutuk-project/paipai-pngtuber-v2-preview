@@ -514,6 +514,7 @@ test("GitHub Pages deploys only after successful validation and uses the exact v
   assert.match(workflow, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
   assert.ok(workflow.includes("name: " + artifact));
   assert.ok(workflow.includes("artifact_name: " + artifact));
+  assert.match(workflow, /jobs:\s+build:[\s\S]*?uses: actions\/upload-pages-artifact@v3[\s\S]*?deploy:\s+needs: build[\s\S]*?uses: actions\/deploy-pages@v4/);
   assert.doesNotMatch(workflow, /^  push:/m);
 });
 
