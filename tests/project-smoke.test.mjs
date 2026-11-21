@@ -435,13 +435,13 @@ test("Creator workspace order is Audio, Visual+, Avatar, Aksesoris and About", (
   assert.deepEqual(ids.slice(0, 5), ["audio", "effects", "avatar", "accessories", "about"]);
   const dock = html.match(/<nav id="mobileBottomNav"[\s\S]*?<\/nav>/)?.[0] || "";
   const targets = [...dock.matchAll(/data-dock-target="([^"]+)"/g)].map(match => match[1]);
-  assert.deepEqual(targets, ["settings", "audio", "effects", "avatar", "accessories", "about"]);
+  assert.deepEqual(targets, ["audio", "effects", "avatar", "accessories", "about"]);
 });
 test("Avatar retains animation parameters and background settings", () => {
   const app = read("src/app.js"); const start = app.indexOf("function renderAvatarWorkspace(content)");
   const end = app.indexOf("function renderAccessoryWorkspace(content)", start); const avatar = app.slice(start, end);
   for (const key of ["idleBob", "breathing", "bounce", "squash", "blinkRate", "fps", "mirror", "output resolution"]) assert.ok(avatar.toLowerCase().includes(key.toLowerCase()));
-  assert.ok(avatar.includes("renderAvatarBackgroundWorkspace(content)"));
+  assert.ok(!avatar.includes("renderAvatarBackgroundWorkspace(content)"));
 });
 test("Accessories have their own upload and management workspace", () => {
   const app = read("src/app.js"); const start = app.indexOf("function renderAccessoryWorkspace(content)");
@@ -449,12 +449,16 @@ test("Accessories have their own upload and management workspace", () => {
   for (const key of ["uploadCharacterAccessories(files)", "accessorySettingsList", "renderAccessorySettingsList()", "renderAccessoryQuickScales()"]) assert.ok(body.includes(key));
   assert.ok(app.includes("function bindAccessoryCanvasDrag(canvas)"));
 });
-test("Visual+ excludes background settings and Avatar includes them", () => {
+test("Visual+ includes background settings and Avatar no longer duplicates them", () => {
   const app = read("src/app.js"); const v = app.indexOf("function renderVisualEffectWorkspace(content)");
   const a = app.indexOf("function renderAboutWorkspace(content)", v); const visual = app.slice(v, a);
-  const b = app.indexOf("function renderAvatarBackgroundWorkspace(content)"); const next = app.indexOf("function renderVisualEffectWorkspace(content)", b);
-  const background = app.slice(b, next); assert.ok(!visual.includes("Background mode"));
-  assert.ok(background.includes("Background mode")); assert.ok(background.includes("Tambah background"));
+  const avatarStart = app.indexOf("function renderAvatarWorkspace(content)");
+  const accessoryStart = app.indexOf("function renderAccessoryWorkspace(content)", avatarStart);
+  const avatar = app.slice(avatarStart, accessoryStart);
+  assert.ok(visual.includes("renderAvatarBackgroundWorkspace(content)"));
+  assert.ok(visual.includes("Background mode"));
+  assert.ok(visual.includes("Tambah background"));
+  assert.ok(!avatar.includes("renderAvatarBackgroundWorkspace(content)"));
 });
 test("About describes the project and retains empty embed/contact placeholders", () => {
   const app = read("src/app.js"); const start = app.indexOf("function renderAboutWorkspace(content)");
@@ -467,4 +471,28 @@ test("GitHub Pages uses a unique artifact name for each workflow attempt", () =>
   const artifact = "github-pages-${{ github.run_id }}-${{ github.run_attempt }}";
   assert.ok(workflow.includes("name: " + artifact));
   assert.ok(workflow.includes("artifact_name: " + artifact));
+});
+
+
+test("accessory ordering uses a bounded integer sequence instead of millisecond timestamps", () => {
+  const edge = read("supabase/functions/vio-api/index.ts");
+  const start = edge.indexOf('if (action === "record_accessory")');
+  const end = edge.indexOf('if (action === "update_accessory")', start);
+  const record = edge.slice(start, end);
+  assert.ok(record.includes('select("sort_order")'));
+  assert.ok(record.includes("const nextSortOrder"));
+  assert.ok(record.includes("sort_order: nextSortOrder"));
+  assert.ok(!record.includes("Date.now()"));
+});
+
+test("Collaboration layout changes broadcast while dragging and OBS excludes editor guides", () => {
+  const app = read("src/app.js");
+  const overlay = read("src/overlay.js");
+  assert.ok(app.includes("function schedulePlayerLayoutBroadcast()"));
+  assert.ok(app.includes("schedulePlayerLayoutBroadcast();"));
+  assert.ok(app.includes("await broadcastPlayerLayout()"));
+  const composite = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
+  assert.ok(composite.includes("visible.forEach(member =>"));
+  assert.ok(!composite.includes("drawCenterGuide"));
+  assert.ok(!composite.includes("drawCompositionGrid"));
 });
