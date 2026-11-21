@@ -257,3 +257,36 @@ test("Collaboration grid is persisted, broadcast, and rendered in preview and OB
   assert.match(overlay, /drawCompositionGrid\(ctx, canvas\.width, canvas\.height\)/);
   assert.match(backend, /"showGrid"/);
 });
+
+
+test("OBS overlay keeps working when Realtime channel subscription fails", () => {
+  const overlay = read("src/overlay.js");
+  assert.match(overlay, /Realtime unavailable; using polling fallback/);
+  assert.match(overlay, /realtimeConnected \? 15000 : 2500/);
+  assert.doesNotMatch(overlay, /reject\(new Error\(\`Realtime channel error/);
+});
+
+test("OBS overlay microphone is user-activated and exposes device selection", () => {
+  const overlay = read("src/overlay.js");
+  const html = read("overlay.html");
+  assert.match(overlay, /function bindOverlayControls/);
+  assert.match(overlay, /startOverlayMicrophone\(\)/);
+  assert.match(overlay, /navigator\.mediaDevices\?\.enumerateDevices/);
+  assert.match(html, /id="overlayMicToggle"/);
+  assert.match(html, /id="overlayMicDevice"/);
+});
+
+test("Collaboration uses a single landscape stage with bold grid and center guide", () => {
+  const app = read("src/app.js");
+  const overlay = read("src/overlay.js");
+  const html = read("overlay.html");
+  const backend = read("supabase/functions/vio-api/index.ts");
+  assert.match(app, /const width = 1920;[\s\S]*const height = 1080;/);
+  assert.match(app, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
+  assert.match(overlay, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
+  assert.match(app, /drawRoomCenterGuide\(ctx, canvas\.width, canvas\.height\)/);
+  assert.match(overlay, /drawCenterGuide\(ctx, canvas\.width, canvas\.height\)/);
+  assert.match(app, /Math\.max\(6, Math\.round\(width \/ 220\)\)/);
+  assert.match(backend, /"showCenterGuide"/);
+  assert.match(html, /height:auto!important/);
+});
