@@ -2297,6 +2297,8 @@ async function leaveRoom(restoreView = true) {
   if (roomLayoutSaveTimer) { clearTimeout(roomLayoutSaveTimer); roomLayoutSaveTimer = 0; }
   for (const entry of roomPreviewRenderers.values()) entry.renderer.stop();
   roomPreviewRenderers.clear();
+  if (roomBackgroundRenderer) roomBackgroundRenderer.setPreferences({ background: { mode: "transparent" } });
+  roomBackgroundProfileKey = "";
   currentRoom = null; roomMembers = []; remotePlayerStates.clear(); remotePlayerSequences.clear(); remoteLayoutSequences.clear(); roomPreviewImages.clear();
   generatedOverlayUrl = "";
   syncOverlayGeneratorButtons("Generate OBS Link", false, "generate");
