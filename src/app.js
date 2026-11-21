@@ -85,10 +85,8 @@ function renderNavigation() {
   }
   const logoutButton = $("logoutButton");
   logoutButton.hidden = !currentUser;
-  const mobileNavigation = window.matchMedia("(max-width: 900px)").matches;
-  const sidebarBottom = $("sidebar").querySelector(".sidebar-bottom");
-  if (mobileNavigation) nav.append(logoutButton);
-  else sidebarBottom.append(logoutButton);
+  // Keep the original sidebar DOM structure. Responsive navigation is CSS-only.
+  $("sidebar").querySelector(".sidebar-bottom").append(logoutButton);
   $("accountName").textContent = currentUser?.username || "Not signed in";
   $("accountRole").textContent = currentUser?.role || "Guest";
   $("accountInitial").textContent = (currentUser?.username || "?").slice(0, 1).toUpperCase();
