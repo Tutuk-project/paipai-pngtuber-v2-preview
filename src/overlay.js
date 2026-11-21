@@ -1,4 +1,4 @@
-import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-collab-asset-diagnostics-1";
+import { AvatarRenderer, resolveRoomAvatarPreferences, sortRoomMembers } from "./avatar-renderer.js?v=20261121-collab-room-composite-1";
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
 
 let config;
@@ -19,6 +19,8 @@ const states = new Map();
 const stateSequences = new Map();
 const layoutSequences = new Map();
 const playerRenderers = new Map();
+let roomBackgroundRenderer = null;
+let roomBackgroundProfileKey = "";
 const canvas = document.getElementById("stage");
 const ctx = canvas?.getContext("2d");
 const statusEl = document.getElementById("status");
@@ -174,15 +176,16 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     playerCanvas.height = canvas.height;
   }
   const profile = member.preferences || {};
+  const spriteProfile = roomPurpose === "collaboration" ? { ...profile, background: { mode: "transparent" } } : profile;
   const overrides = member.overrides || {};
-  const preferences = resolveRoomAvatarPreferences(profile, overrides, width, canvas.height, memberIndex, members.length);
-  const profileKey = JSON.stringify(profile);
+  const preferences = resolveRoomAvatarPreferences(spriteProfile, overrides, width, canvas.height, memberIndex, members.length);
+  const profileKey = JSON.stringify(spriteProfile);
   const assets = member.assets || {};
   const assetsKey = JSON.stringify(assets);
   const accessories = member.accessories || [];
   const accessoriesKey = JSON.stringify(accessories);
   if (entry.profileKey !== profileKey) {
-    renderer.setPreferences(profile);
+    renderer.setPreferences(spriteProfile);
     entry.profileKey = profileKey;
   }
   if (entry.assetsKey !== assetsKey) {
@@ -298,7 +301,8 @@ function drawCompositeFrame(now) {
   if (now - lastCompositeFrame >= 1000 / 30) {
     lastCompositeFrame = now;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const visible = members.slice(0, 4);
+    const visible = (roomPurpose === "collaboration" ? sortRoomMembers(members) : members).slice(0, 4);
+    if (roomPurpose === "collaboration") roomBackgroundRenderer?.drawBackgroundTo(ctx, canvas.width, canvas.height);
     if (visible.length) {
       // OBS output mirrors participant avatar transforms but never includes
       // editor-only composition guides. Grid and center dummy remain preview aids.
@@ -313,7 +317,7 @@ function drawCompositeFrame(now) {
 
 function render() {
   if (!canvas || !ctx) return;
-  const visible = members.slice(0, 4);
+  const visible = (roomPurpose === "collaboration" ? sortRoomMembers(members) : members).slice(0, 4);
   if (!visible.length) {
     if (compositeRaf) cancelAnimationFrame(compositeRaf);
     compositeRaf = 0;
@@ -375,8 +379,17 @@ async function pollOverlayState() {
 async function refreshMembers() {
   const result = await api("overlay_connect", { room_id: roomId, overlay_token: overlayToken });
   roomPurpose = result.room?.purpose || roomPurpose;
-  members = result.members || [];
+  members = roomPurpose === "collaboration" ? sortRoomMembers(result.members || []) : (result.members || []);
   const hostMember = members.find(member => member.is_host) || members[0];
+  if (roomPurpose === "collaboration") {
+    const hostBackground = members.find(member => member.is_host)?.preferences?.background || { mode: "transparent" };
+    const hostBackgroundKey = JSON.stringify(hostBackground);
+    if (!roomBackgroundRenderer) roomBackgroundRenderer = new AvatarRenderer(document.createElement("canvas"));
+    if (roomBackgroundProfileKey !== hostBackgroundKey) {
+      roomBackgroundRenderer.setPreferences({ background: hostBackground });
+      roomBackgroundProfileKey = hostBackgroundKey;
+    }
+  }
   if (hostMember) localMicUserId = hostMember.user_id;
   const output = hostMember?.preferences || {};
   const isCollaborationRoom = roomPurpose === "collaboration";
