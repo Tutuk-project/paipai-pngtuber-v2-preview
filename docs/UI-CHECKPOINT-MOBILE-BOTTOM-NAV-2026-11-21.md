@@ -110,3 +110,81 @@ Test sequence:
 6. Collaboration: room entry, avatar synchronization, room controls, and landscape stage; ensure mobile dock stays hidden.
 
 After each test, classify any failure by layer (UI, renderer, audio, effects/settings, OBS overlay, or Collaboration) and only then make a narrowly scoped fix. Do not infer that a green workflow proves the app is visually correct on-device.
+
+
+## Checkpoint update — OBS Solo/Collaboration, automatic mic, and expression transition repair
+Date: 2026-11-21
+
+### User-reported findings
+1. Solo OBS link did not capture microphone.
+2. Grid and dummy/center guide worked in the Creator preview.
+3. Collaboration OBS microphone worked only after manually pressing the overlay's "Aktifkan Mic" button.
+4. Creator preview and Solo OBS briefly showed a blank PNG during expression transitions.
+5. Both Solo and Collaboration OBS outputs must have no visible UI controls.
+6. Collaboration OBS must include the live grid and dummy/center guide; when both are disabled output must be transparent; when either is enabled the composition background should be black.
+7. Collaboration OBS resolution and character positions must follow the Creator Collaboration preview.
+
+### Changes committed to `main`
+- `src/overlay.js`
+  - Requests `getUserMedia` automatically after the overlay resolves the room host identity. This applies to Solo/personal overlay and Collaboration.
+  - Keeps Creator-side Realtime talking-state broadcasts as fallback if local OBS capture is denied/unavailable.
+  - Requests Web Audio context resume on the first allowed pointer/touch/key interaction through AudioEngine's shared unlock listeners.
+  - Removed all overlay-control binding/state code from the runtime.
+  - Reads grid and center-guide state from current room member overrides at composite time, so turning a guide off removes it rather than retaining the initial ON state.
+  - Draws an opaque black base only when a Collaboration grid or center guide is active. With both disabled, the canvas is cleared and alpha transparency is preserved.
+  - Accepts validated Collaboration width/height query parameters, with 320–3840 dimension bounds and an 8.3 MP total pixel cap.
+- `src/audio-engine.js`
+  - Added invisible retry hooks for `AudioContext.resume()` on `pointerdown`, `touchend`, and `keydown`, for browser/CEF autoplay restrictions. No visible OBS controls were added.
+- `src/avatar-renderer.js`
+  - Retains the last successfully decoded avatar image while a replacement expression PNG is still loading or fails, avoiding transient blank output during Idle/Talking/Blink transitions.
+  - Clears that fallback when the actual avatar asset set changes, preventing the previous character from lingering after a character switch.
+  - Uses storage path identity without signed URL query/hash tokens, so refreshed signed URLs do not look like a character change.
+  - Triggers a redraw when an image load fails, allowing the fallback to be displayed.
+- `src/app.js`
+  - Creator continues to request its own microphone when generating a link and broadcasts state as fallback.
+  - Generated Solo and Collaboration links no longer set `controls=1`.
+  - Collaboration links include the actual `roomStage.width` and `roomStage.height`; the OBS output uses these dimensions.
+  - X/Y offsets and scale formulas were compared with the Collaboration preview and match.
+  - Removed the old “Copy Link + Controls” action from the generator UI.
+- `overlay.html`
+  - Removed mic/grid/center-guide buttons and device selector entirely rather than merely hiding them.
+  - The status panel is only visible in explicit debug mode (`?debug=1`); ordinary Solo and Collaboration output remains clean.
+- Supabase Edge Function was not changed.
+
+### Cache versions
+- Creator app: `app.js?v=20261121-obs-fix-3`
+- OBS overlay: `overlay.js?v=20261121-obs-fix-4`
+- Avatar renderer module: `avatar-renderer.js?v=20261121-avatar-fallback-2`
+- Audio engine module: `audio-engine.js?v=20261121-auto-mic-1`
+
+### Source verification completed
+- JavaScript syntax parsing passed for `src/app.js`, `src/overlay.js`, `src/avatar-renderer.js`, `src/audio-engine.js`, and `tests/security-hardening.test.mjs`.
+- Static checks passed for automatic mic invocation, native `getUserMedia` path, Web Audio unlock hooks, removal of output buttons/controls, live grid/dummy state, black-background/transparent rules, Collaboration dimensions and layout formulas, renderer fallback, character switch isolation, and updated cache keys.
+- Current file revisions:
+  - `src/app.js`: `3312e13a266487bd9e713a8bbc8fe777608d5f33`
+  - `src/overlay.js`: `833af18324cba42a7736f4b99d58f3b8e6bd548f`
+  - `src/avatar-renderer.js`: `0ca4b898f4289f21d9f044f4520ef0536b11c7f3`
+  - `src/audio-engine.js`: `8fe8f7396acfdea7574dd5cec8304904f2060a66`
+  - `overlay.html`: `3aff945fcbfafa3bdd139623a604ad62371f3b62`
+  - `index.html`: `fa062e270b54e618897cf64a5d23b6682c8a38f6`
+  - `tests/security-hardening.test.mjs`: `4e653472ad1d5d7257b5d44bd1dcedd9318c46f9`
+  - Supabase Edge Function remains `557a78c877a1134836ff9e5b312c88160b44c269`
+- These checks are source parsing and static assertions only. A full Node test run/GitHub Actions result for the latest OBS repair commits has not yet been independently confirmed.
+
+### Browser permission limitation
+- The page now automatically calls `getUserMedia` when the OBS source loads and the host identity is known, so a browser permission prompt can appear.
+- JavaScript cannot silently override a user/browser denial or force an OBS/CEF host to grant microphone access. If a permission was previously denied or the host blocks capture, the site/Browser Source microphone permission must be allowed in that host's settings and the source reloaded.
+- Web Audio may remain suspended until user activation in some Chromium/CEF contexts. The first click/tap/key on the host page silently retries `AudioContext.resume()`. This adds no controls to the OBS output.
+- Creator microphone Realtime state broadcasts remain a fallback for avatar expression state; they do not carry microphone audio into the OBS source.
+
+### Next required device QA — no additional code changes before this pass
+On the user's POCO X7 Pro / Chrome Android and then inside the intended OBS Browser Source:
+1. Open a new Solo OBS link. Confirm permission prompt appears automatically; allow microphone. Speak and check Talking/Idle transitions. Also test the previously-denied permission case.
+2. Open a Collaboration OBS link. Confirm permission prompt appears without an overlay button; test microphone capture and Creator broadcast fallback.
+3. Confirm both output links show no controls or editor UI, including during connection errors.
+4. In Collaboration, toggle grid and dummy/center guide ON. Confirm black background, correct guide, resolution matching Creator stage, and matching avatar scale/X/Y positions.
+5. Toggle both guide layers OFF. Confirm alpha transparency returns in OBS (test over a colored OBS scene source, not only a black preview).
+6. Switch Idle/Talking/Blink expressions rapidly in Creator and OBS. Confirm no transient blank PNG. Then switch to a different character and confirm the previous avatar never flashes or remains.
+7. Verify Solo output sizing still follows the Solo profile output dimensions and verify Collaboration remains the selected room-stage dimensions.
+
+Do not report the OBS fixes as device-verified until these checks are completed. Classify any failure as permission/browser host, audio state, guide compositing, output sizing/layout, or avatar asset-transition issue before changing code.
