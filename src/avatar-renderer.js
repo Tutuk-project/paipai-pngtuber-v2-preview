@@ -168,8 +168,15 @@ export class AvatarRenderer {
     const image = new Image();
     image.decoding = "async";
     image.crossOrigin = "anonymous";
-    image.onload = () => this.drawOnce();
+    image.__vioLoadState = "loading";
+    image.onload = () => {
+      image.__vioLoadState = "loaded";
+      image.__vioLoadedAt = Date.now();
+      this.drawOnce();
+    };
     image.onerror = () => {
+      image.__vioLoadState = "error";
+      image.__vioErrorAt = Date.now();
       this.images.set(src, null);
       this.drawOnce();
     };
