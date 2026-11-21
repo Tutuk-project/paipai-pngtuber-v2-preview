@@ -101,11 +101,10 @@ function updateLocalMicState(state) {
   render();
 }
 
-async function startInvisibleSoloMicrophone() {
-  if (roomPurpose !== "personal_overlay" || !localMicUserId || localMicEngine) return;
+async function startOverlayMicrophone() {
+  if (!localMicUserId || localMicEngine) return;
   const host = members.find(member => member.user_id === localMicUserId);
-  // Capture from the OBS/browser host itself. No controls are added to overlay.html;
-  // the browser may request microphone permission once, then capture remains invisible.
+  // Capture from a direct button gesture so Android WebViews can grant mic permission.
   localMicEngine = new AudioEngine({
     deviceId: host?.preferences?.deviceId || "",
     sensitivity: Number(host?.preferences?.sensitivity ?? 1),
@@ -124,11 +123,15 @@ async function startInvisibleSoloMicrophone() {
     await localMicEngine.start();
     localMicActive = true;
     updateLocalMicState(localMicEngine.state || "idle");
-    if (debugMode) setStatus("Solo mic active · no overlay controls", false, true);
+    updateOverlayControlState();
+    await refreshOverlayMicDevices();
+    if (debugMode) setStatus("Overlay microphone active", false, true);
   } catch (error) {
     localMicActive = false;
-    console.warn("Solo OBS microphone capture unavailable:", error);
-    if (debugMode) setStatus(`Solo mic unavailable: ${error.message}`, true, true);
+    localMicEngine = null;
+    updateOverlayControlState();
+    console.warn("OBS overlay microphone capture unavailable:", error);
+    setStatus("Mic tidak tersedia: " + error.message + ". Tekan Aktifkan Mic dan izinkan akses mikrofon.", true, true);
   }
 }
 
@@ -161,6 +164,55 @@ function drawCenterGuide(context, width, height) {
   context.beginPath(); context.moveTo(-bodyW / 2, -bodyH * .30); context.lineTo(-bodyW * .95, bodyH * .05); context.lineTo(-bodyW * .62, bodyH * .34); context.moveTo(bodyW / 2, -bodyH * .30); context.lineTo(bodyW * .95, bodyH * .05); context.lineTo(bodyW * .62, bodyH * .34); context.stroke();
   context.font = "700 " + (22 * unit) + "px system-ui"; context.textAlign = "center"; context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("CENTER GUIDE", 0, bodyH * .88);
   context.restore();
+}
+
+function updateOverlayControlState() {
+  const micButton = document.getElementById("overlayMicToggle");
+  const gridButton = document.getElementById("overlayGridToggle");
+  const centerButton = document.getElementById("overlayCenterToggle");
+  const panel = document.getElementById("overlayControls");
+  const showButton = document.getElementById("overlayControlsShow");
+  if (micButton) { micButton.textContent = localMicActive ? "Mic ON · Matikan" : "Aktifkan Mic"; micButton.setAttribute("aria-pressed", String(localMicActive)); }
+  if (gridButton) gridButton.setAttribute("aria-pressed", String(gridEnabled));
+  if (centerButton) centerButton.setAttribute("aria-pressed", String(centerGuideEnabled));
+  panel?.classList.toggle("is-visible", controlsVisible);
+  showButton?.classList.toggle("is-visible", !controlsVisible && params.get("controls") === "1");
+}
+
+async function refreshOverlayMicDevices() {
+  const select = document.getElementById("overlayMicDevice");
+  if (!select || !navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const selected = localMicEngine?.options?.deviceId || select.value;
+    const devices = (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === "audioinput");
+    select.replaceChildren(new Option("System default mic", ""));
+    devices.forEach((device, index) => select.add(new Option(device.label || ("Microphone " + (index + 1)), device.deviceId)));
+    select.value = devices.some(device => device.deviceId === selected) ? selected : "";
+  } catch (error) { console.warn("Microphone list unavailable:", error); }
+}
+
+function bindOverlayControls() {
+  document.getElementById("overlayMicToggle")?.addEventListener("click", async () => {
+    const button = document.getElementById("overlayMicToggle"); button.disabled = true;
+    try {
+      if (localMicActive && localMicEngine) {
+        await localMicEngine.stop(); localMicEngine = null; localMicActive = false; updateLocalMicState("idle");
+      } else await startOverlayMicrophone();
+    } finally { button.disabled = false; updateOverlayControlState(); }
+  });
+  document.getElementById("overlayMicDevice")?.addEventListener("change", async event => {
+    if (!localMicActive) return;
+    const deviceId = event.target.value;
+    await localMicEngine?.stop(); localMicEngine = null; localMicActive = false;
+    const host = members.find(member => member.user_id === localMicUserId);
+    if (host) host.preferences = { ...(host.preferences || {}), deviceId };
+    await startOverlayMicrophone();
+  });
+  document.getElementById("overlayGridToggle")?.addEventListener("click", () => { gridEnabled = !gridEnabled; updateOverlayControlState(); render(); });
+  document.getElementById("overlayCenterToggle")?.addEventListener("click", () => { centerGuideEnabled = !centerGuideEnabled; updateOverlayControlState(); render(); });
+  document.getElementById("overlayControlsHide")?.addEventListener("click", () => { controlsVisible = false; updateOverlayControlState(); });
+  document.getElementById("overlayControlsShow")?.addEventListener("click", () => { controlsVisible = true; updateOverlayControlState(); });
+  updateOverlayControlState();
 }
 
 function drawCompositeFrame(now) {
@@ -241,6 +293,9 @@ async function refreshMembers() {
     setStatus("Overlay terhubung ke server, tetapi daftar peserta room kosong. Pastikan room masih aktif dan akun pembuat link masih menjadi anggota.", true);
     return;
   }
+  gridEnabled = gridEnabled || members.some(member => member.overrides?.showGrid === true);
+  centerGuideEnabled = centerGuideEnabled || members.some(member => member.overrides?.showCenterGuide === true);
+  updateOverlayControlState();
   const hasAvatarAssets = members.some(member => Object.values(member.assets || {}).some(Boolean));
   if (!hasAvatarAssets) {
     setStatus("Overlay terhubung, tetapi PNG avatar belum ditemukan. Unggah setidaknya ekspresi Idle di Vio Studio > Character.", true);
@@ -253,6 +308,7 @@ async function refreshMembers() {
 async function boot() {
   try {
     if (!canvas || !ctx) throw new Error("Canvas OBS tidak ditemukan di halaman overlay.");
+    bindOverlayControls();
     setStatus("Membaca kredensial overlay…");
     const configModule = await import("./config.js");
     config = configModule.VIO_CONFIG;
@@ -311,22 +367,27 @@ async function boot() {
       .on("presence", { event: "sync" }, () => {
         refreshMembers().catch(error => setStatus(`Sinkronisasi peserta gagal: ${error.message}`, true));
       });
-    await supabase.realtime.setAuth();
-    await new Promise((resolve, reject) => channel.subscribe(status => {
-      if (status === "SUBSCRIBED") resolve();
-      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") reject(new Error(`Realtime channel error: ${status}`));
-    }));
+    try {
+      await supabase.realtime.setAuth();
+      await new Promise(resolve => {
+        let settled = false;
+        const finish = () => { if (!settled) { settled = true; resolve(); } };
+        const timeout = setTimeout(finish, 6500);
+        channel.subscribe(status => {
+          if (status === "SUBSCRIBED") { realtimeConnected = true; clearTimeout(timeout); finish(); }
+          else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") { realtimeConnected = false; clearTimeout(timeout); finish(); }
+        });
+      });
+    } catch (error) { realtimeConnected = false; console.warn("Realtime unavailable; using polling fallback:", error); }
     if (members.length && members.some(member => Object.values(member.assets || {}).some(Boolean))) {
-      if (debugMode) setStatus(`Connected · ${members.length} participant(s) · Vio Studio v2.0`, false);
+      if (debugMode) setStatus(realtimeConnected ? "Realtime connected" : "Realtime unavailable · polling fallback active", !realtimeConnected);
       else clearStatus();
     }
-    // Personal Solo overlays capture their own mic. Collaboration overlays keep
-    // using each participant's Creator-side state broadcasts.
-    await startInvisibleSoloMicrophone();
+    // Mic is deliberately user-activated for Android WebView permission rules.
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
-      refreshMembers().catch(error => setStatus(`Refresh overlay gagal: ${error.message}`, true));
-    }, 15000);
+      refreshMembers().catch(error => { if (debugMode) setStatus("Refresh overlay gagal: " + error.message, true); });
+    }, realtimeConnected ? 15000 : 2500);
   } catch (error) {
     console.error("Vio Studio OBS overlay error:", error);
     let message = error instanceof Error ? error.message : String(error);
