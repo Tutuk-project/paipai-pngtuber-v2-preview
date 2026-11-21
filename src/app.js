@@ -482,9 +482,9 @@ function renderCharacterWorkspace(content) {
   presetLabel.textContent = "Preset";
   const preset = document.createElement("select");
   preset.className = "select-input";
-  preset.innerHTML = '<option value="1080x1920">TikTok Portrait · 1080 × 1920</option><option value="720x1280">Portrait HD · 720 × 1280</option><option value="1920x1080">Landscape Full HD · 1920 × 1080</option><option value="1280x720">Landscape HD · 1280 × 720</option><option value="1080x1080">Square · 1080 × 1080</option><option value="custom">Custom dimensions</option>';
+  preset.innerHTML = '<option value="1080x1920">TikTok Portrait · 1080 × 1920</option><option value="720x1280">Portrait HD · 720 × 1280</option><option value="1920x1080">Landscape Full HD · 1920 × 1080</option><option value="1280x720">Landscape HD · 1280 × 720</option><option value="1080x1080">Square · 1080 × 1080</option><option value="500x500">Default Square · 500 × 500</option><option value="custom">Custom dimensions</option>';
   const key = `${Number(profilePreferences.outputWidth) || 500}x${Number(profilePreferences.outputHeight) || 500}`;
-  preset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080"].includes(key) ? key : "custom";
+  preset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080","500x500"].includes(key) ? key : "custom";
   const widthField = settingField("Width (px)", "main_outputWidth", String(profilePreferences.outputWidth || 500));
   const width = widthField.querySelector("input"); width.type = "number"; width.min = "320"; width.max = "3840"; width.step = "1";
   const heightField = settingField("Height (px)", "main_outputHeight", String(profilePreferences.outputHeight || 500));
