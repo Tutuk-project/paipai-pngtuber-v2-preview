@@ -2189,9 +2189,17 @@ async function generateOverlayLink(button = null) {
     const url = new URL("../overlay.html", import.meta.url);
     url.hash = new URLSearchParams({ room: result.room_id, token: result.overlay_token }).toString();
     // Keep the generated OBS source clean: microphone state comes from the Creator session.
-    // Collaboration guides are controlled in Creator and broadcast to the overlay.
-    if (room.purpose === "collaboration") url.searchParams.set("controls", "1");
-    $("copyOverlayControlsLink").hidden = room.purpose !== "collaboration";
+    // Keep every OBS output UI-free. Collaboration output uses the exact
+    // internal preview canvas dimensions, while member position/scale are
+    // read from the same persisted room overrides as Creator preview.
+    if (room.purpose === "collaboration") {
+      const stage = $("roomStage");
+      const width = Math.max(320, Math.min(3840, Number(stage?.width) || 1920));
+      const height = Math.max(320, Math.min(3840, Number(stage?.height) || 1080));
+      if (width * height > 8294400) throw new Error("Resolusi preview Collaboration melebihi batas 8,3 megapiksel.");
+      url.searchParams.set("width", String(width));
+      url.searchParams.set("height", String(height));
+    }
     generatedOverlayUrl = url.toString();
     $("overlayLinkUrl").value = generatedOverlayUrl;
     syncOverlayGeneratorButtons("Salin Link", false, "copy");
@@ -2403,14 +2411,6 @@ function setupEvents() {
   $("copyRoomCode").addEventListener("click", async () => { if (currentRoom) { try { await copyText(currentRoom.room_code); showToast("Kode room disalin"); } catch (error) { showToast(error.message, "error"); } } });
   $("closeOverlayLink").addEventListener("click", () => $("overlayLinkDialog").close());
   $("copyOverlayLink").addEventListener("click", async () => { try { await copyText(generatedOverlayUrl); showToast("Link OBS disalin"); } catch (error) { showToast(error.message, "error"); } });
-  $("copyOverlayControlsLink").addEventListener("click", async () => {
-    try {
-      const controlsUrl = new URL(generatedOverlayUrl);
-      controlsUrl.searchParams.set("controls", "1");
-      await copyText(controlsUrl.toString());
-      showToast("Link OBS dengan kontrol mic dan guide disalin");
-    } catch (error) { showToast(error.message, "error"); }
-  });
   $("openOverlayPreview").addEventListener("click", () => { if (generatedOverlayUrl) window.open(generatedOverlayUrl, "_blank", "noopener,noreferrer"); });
   $("avatarScaleDecrease").addEventListener("click", () => changeAvatarScale(-5));
   $("avatarScaleIncrease").addEventListener("click", () => changeAvatarScale(5));
