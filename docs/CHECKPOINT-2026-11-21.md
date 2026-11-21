@@ -31,3 +31,6 @@
 ## UI preservation note
 - The editable display name and read-only Admin-managed username from the former Profile workspace remain available under About > Account details.
 - The mobile Settings tab remains a stage-preview shortcut and does not replace the workspace tabs.
+## GitHub Pages deployment safety
+- Pages artifacts use a unique name per GitHub Actions run and attempt to avoid duplicate artifact selection during deployment retries.
+- Main CI validation and Preview validation passed on commit b7e94d934aa2f05f5c131ce355115e732a14f1eb; Pages artifact selection is hardened in the following workflow commit.

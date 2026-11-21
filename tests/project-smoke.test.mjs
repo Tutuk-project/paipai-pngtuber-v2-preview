@@ -461,3 +461,10 @@ test("About describes the project and retains empty embed/contact placeholders",
   const end = app.indexOf("function renderSettings(menuId)", start); const body = app.slice(start, end);
   for (const text of ["Vio Studio adalah workspace PNGTuber modular", "Dibuat untuk", "Embed links", "Admin contact", "Account details", "Simpan display name"]) assert.ok(body.includes(text));
 });
+
+test("GitHub Pages uses a unique artifact name for each workflow attempt", () => {
+  const workflow = read(".github/workflows/pages.yml");
+  const artifact = "github-pages-${{ github.run_id }}-${{ github.run_attempt }}";
+  assert.ok(workflow.includes("name: " + artifact));
+  assert.ok(workflow.includes("artifact_name: " + artifact));
+});
