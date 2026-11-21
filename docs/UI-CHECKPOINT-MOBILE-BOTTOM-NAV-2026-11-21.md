@@ -36,11 +36,11 @@ The bottom-navigation design experiment is rolled back. The app should be tested
 - Used `Creator Studio — Mobile-html.zip` as a visual reference only. The static React/design-tool runtime and sample avatar image were not copied into production.
 - Added a responsive V+ Creator Studio header and a five-item mobile dock: Stage, Background, Audio, Effects, and Profile.
 - Mapped dock actions to existing application views and settings accordions:
-  - Stage → existing profile/preview workspace
+  - Stage → scrolls to the existing live avatar preview; from Admin it returns to the Creator workspace first
   - Background → existing Visual Effect+ workspace, opening its Background accordion
   - Audio → existing microphone settings
   - Effects → existing Visual Effect+ workspace, opening the Makeup/effect controls
-  - Profile → existing Character & Assets workspace
+  - Profile → existing account profile settings; Character & Assets remains available from the account/navigation drawer
 - Added a separate mobile account/navigation drawer so Admin Center, Test Lab, and Logout remain reachable without overloading the five primary dock items.
 - Added neon cyan / purple / magenta mobile styling, frosted panels, safe-area-aware dock spacing, and portrait-friendly preview layout.
 - The dock is hidden in Collaboration room mode; its existing landscape stage and room controls remain the active room UI.
