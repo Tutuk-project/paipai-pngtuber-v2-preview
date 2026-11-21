@@ -259,7 +259,7 @@
 .app-shell.in-room #collaborationView[hidden]{display:none!important}
 .app-shell.in-room .room-toolbar,.app-shell.in-room .collab-preview,.app-shell.in-room #collaborationView>.settings-panel{width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box}
 .app-shell.in-room .collab-stage-wrap{width:100%;min-width:0;overflow:hidden;box-sizing:border-box}
-.app-shell.in-room .collab-stage-wrap>canvas{display:block;width:100%;height:auto;max-height:65vh;object-fit:contain;aspect-ratio:9/16}
+.app-shell.in-room .collab-stage-wrap>canvas{display:block;width:100%;height:auto;max-height:65vh;object-fit:contain;aspect-ratio:16/9}
 .app-shell.in-room .room-actions{display:flex;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
 .app-shell.in-room .room-actions .button{flex:1 1 130px;min-width:0}
 
@@ -324,7 +324,7 @@
 .app-shell.in-room .room-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;min-width:0}
 .app-shell.in-room .room-actions>*{min-width:0;width:100%;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .app-shell.in-room .collab-stage-wrap{display:grid;justify-items:center;gap:10px;padding:12px;min-width:0;overflow:hidden}
-.app-shell.in-room .collab-stage-wrap>canvas{width:auto!important;height:min(42vh,360px)!important;max-height:360px!important;max-width:100%!important;aspect-ratio:9/16!important;object-fit:contain}
+.app-shell.in-room .collab-stage-wrap>canvas{width:100%!important;height:auto!important;max-height:none!important;max-width:960px!important;aspect-ratio:16/9!important;object-fit:contain}
 .app-shell.in-room .participant-names{width:100%;min-width:0}
 .app-shell.in-room .participant-names[hidden]{display:none!important}
 .app-shell.in-room .settings-panel{min-width:0}
