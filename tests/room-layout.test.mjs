@@ -53,7 +53,8 @@ test("OBS reapplies member transforms on render and reconciles active Realtime c
   const start = overlay.indexOf("function render()");
   const end = overlay.indexOf("async function pollOverlayState()", start);
   const block = overlay.slice(start, end);
-  assert.match(block, /ensurePlayerRenderer\(member, canvas\.width, index\)/);
+  assert.match(block, /const layouts = roomPurpose === "collaboration" \? resolveRoomAvatarLayouts\(orderedMembers, canvas\.width, canvas\.height\) : \[\]/);
+  assert.match(block, /ensurePlayerRenderer\(member, canvas\.width, index, layouts\[index\] \|\| null\)/);
   assert.match(overlay, /realtimeConnected \? 2500 : 1000/);
 });
 
