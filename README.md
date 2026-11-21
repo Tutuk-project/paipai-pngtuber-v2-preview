@@ -16,6 +16,10 @@ This is the first modular v2.0 foundation for the existing PNGTuber project. It 
 - New microphone engine with platform-friendly media constraints, fallback capture constraints, AGC/noise suppression preferences, adaptive noise floor, calibrated threshold, hysteresis, hangover, gain control and AudioContext resume support.
 - Additive Supabase SQL schema and a single Edge Function API.
 
+## Latest development checkpoint
+
+- [Checkpoint 51 — Accessory drag editor and per-item transforms](docs/CHECKPOINT-51-2026-11-21.md)
+
 ## Latest implementation note
 
 - [Accessory dropdown editor and shared Collaboration OBS layout requirements](docs/IMPLEMENTATION-NOTE-2026-11-21-ACCESSORY-EDITOR-SHARED-OBS.md)
