@@ -439,3 +439,14 @@ test("AvatarRenderer preserves the last decoded PNG while a new expression is lo
   assert.match(renderer, /this\.lastGoodAvatarImage = decodedAvatar/);
   assert.match(renderer, /else if \(!pendingAvatar && !this\.lastGoodAvatarImage\)/);
 });
+
+
+test("Collaboration overlay uses the same avatar layout positions as the Creator preview", () => {
+  const app = read("src/app.js");
+  const overlay = read("src/overlay.js");
+  assert.match(app, /offsetX: Math\.max\(-100, Math\.min\(100, Object\.hasOwn\(overrides, "x"\)/);
+  assert.match(app, /offsetY: Math\.max\(-100, Math\.min\(100, Number\(overrides\.y\) \|\| 0\)\) \* playerHeight \* 0\.0035/);
+  assert.match(overlay, /const layoutX = Object\.hasOwn\(overrides, "x"\)/);
+  assert.match(overlay, /preferences\.offsetX = Math\.max\(-100, Math\.min\(100, layoutX\)\) \* width \* 0\.004/);
+  assert.match(overlay, /preferences\.offsetY = Math\.max\(-100, Math\.min\(100, Number\(overrides\.y\) \|\| 0\)\) \* canvas\.height \* 0\.0035/);
+});
