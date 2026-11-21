@@ -142,8 +142,8 @@ async function startOverlayMicrophone() {
 function drawCompositionGrid(context, width, height) {
   context.save();
   context.strokeStyle = "rgba(210,245,235,.98)";
-  context.lineWidth = Math.max(6, Math.round(width / 220));
-  context.setLineDash([Math.max(8, width / 150), Math.max(7, width / 190)]);
+  context.lineWidth = Math.max(18, Math.round(width / 100));
+  context.setLineDash([Math.max(18, width / 90), Math.max(14, width / 120)]);
   for (let index = 1; index <= 2; index++) {
     const x = width * index / 3;
     const y = height * index / 3;
@@ -152,21 +152,21 @@ function drawCompositionGrid(context, width, height) {
   }
   context.setLineDash([]);
   context.strokeStyle = "rgba(210,245,235,.95)";
-  context.lineWidth = Math.max(5, Math.round(width / 280));
+  context.lineWidth = Math.max(12, Math.round(width / 150));
   context.strokeRect(width * .02, height * .02, width * .96, height * .96);
   context.restore();
 }
 
 function drawCenterGuide(context, width, height) {
   const cx = width / 2, cy = height / 2, unit = Math.min(width, height) / 1080;
-  const headR = 54 * unit, bodyW = 112 * unit, bodyH = 150 * unit;
+  const headR = 72 * unit, bodyW = 170 * unit, bodyH = 220 * unit;
   context.save(); context.translate(cx, cy);
-  context.strokeStyle = "rgba(255,220,170,.98)"; context.fillStyle = "rgba(255,220,170,.24)"; context.lineWidth = Math.max(5, 5 * unit);
-  context.setLineDash([10 * unit, 7 * unit]); context.beginPath(); context.moveTo(-width * .13, 0); context.lineTo(width * .13, 0); context.moveTo(0, -height * .25); context.lineTo(0, height * .25); context.stroke(); context.setLineDash([]);
+  context.globalAlpha = 0.78; context.strokeStyle = "rgba(255,220,170,.98)"; context.fillStyle = "rgba(255,220,170,.28)"; context.lineWidth = Math.max(7, 7 * unit);
+  context.setLineDash([14 * unit, 10 * unit]); context.beginPath(); context.moveTo(-width * .16, 0); context.lineTo(width * .16, 0); context.moveTo(0, -height * .30); context.lineTo(0, height * .30); context.stroke(); context.setLineDash([]);
   context.beginPath(); context.arc(0, -bodyH * .72, headR, 0, Math.PI * 2); context.fill(); context.stroke();
-  context.beginPath(); context.roundRect(-bodyW / 2, -bodyH * .48, bodyW, bodyH, 30 * unit); context.fill(); context.stroke();
+  context.beginPath(); context.arc(0, -bodyH * .80, headR * 1.08, Math.PI * 1.08, Math.PI * 1.92); context.stroke();\n  context.beginPath(); context.arc(-headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); context.arc(headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); context.stroke();\n  context.beginPath(); context.roundRect(-bodyW / 2, -bodyH * .42, bodyW, bodyH * .92, 42 * unit); context.fill(); context.stroke();
   context.beginPath(); context.moveTo(-bodyW / 2, -bodyH * .30); context.lineTo(-bodyW * .95, bodyH * .05); context.lineTo(-bodyW * .62, bodyH * .34); context.moveTo(bodyW / 2, -bodyH * .30); context.lineTo(bodyW * .95, bodyH * .05); context.lineTo(bodyW * .62, bodyH * .34); context.stroke();
-  context.font = "700 " + (22 * unit) + "px system-ui"; context.textAlign = "center"; context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("CENTER GUIDE", 0, bodyH * .88);
+  context.font = "700 " + (22 * unit) + "px system-ui"; context.textAlign = "center"; context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("AVATAR CENTER", 0, bodyH * .72);
   context.restore();
 }
 
@@ -306,10 +306,10 @@ async function refreshMembers() {
   const isCollaborationRoom = roomPurpose === "collaboration";
   const width = isCollaborationRoom
     ? 1920
-    : Math.max(320, Math.min(3840, Math.round(Number(output.outputWidth) || 1080)));
+    : Math.max(320, Math.min(3840, Math.round(Number(output.outputWidth) || 500)));
   const height = isCollaborationRoom
     ? 1080
-    : Math.max(320, Math.min(3840, Math.round(Number(output.outputHeight) || 1920)));
+    : Math.max(320, Math.min(3840, Math.round(Number(output.outputHeight) || 500)));
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   canvas.style.aspectRatio = `${width} / ${height}`;
 
@@ -428,7 +428,7 @@ async function boot() {
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
       pollOverlayState().catch(error => { if (debugMode) setStatus("Polling overlay gagal: " + error.message, true); });
-    }, realtimeConnected ? 10000 : 4000);
+    }, realtimeConnected ? 10000 : 1000);
     if (assetRefreshTimer) clearInterval(assetRefreshTimer);
     assetRefreshTimer = setInterval(() => {
       refreshMembers().catch(error => { if (debugMode) setStatus("Refresh aset overlay gagal: " + error.message, true); });
