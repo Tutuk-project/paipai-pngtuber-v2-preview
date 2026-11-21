@@ -483,15 +483,15 @@ function renderCharacterWorkspace(content) {
   const preset = document.createElement("select");
   preset.className = "select-input";
   preset.innerHTML = '<option value="1080x1920">TikTok Portrait · 1080 × 1920</option><option value="720x1280">Portrait HD · 720 × 1280</option><option value="1920x1080">Landscape Full HD · 1920 × 1080</option><option value="1280x720">Landscape HD · 1280 × 720</option><option value="1080x1080">Square · 1080 × 1080</option><option value="custom">Custom dimensions</option>';
-  const key = `${Number(profilePreferences.outputWidth) || 1080}x${Number(profilePreferences.outputHeight) || 1920}`;
+  const key = `${Number(profilePreferences.outputWidth) || 500}x${Number(profilePreferences.outputHeight) || 500}`;
   preset.value = ["1080x1920","720x1280","1920x1080","1280x720","1080x1080"].includes(key) ? key : "custom";
-  const widthField = settingField("Width (px)", "main_outputWidth", String(profilePreferences.outputWidth || 1080));
+  const widthField = settingField("Width (px)", "main_outputWidth", String(profilePreferences.outputWidth || 500));
   const width = widthField.querySelector("input"); width.type = "number"; width.min = "320"; width.max = "3840"; width.step = "1";
-  const heightField = settingField("Height (px)", "main_outputHeight", String(profilePreferences.outputHeight || 1920));
+  const heightField = settingField("Height (px)", "main_outputHeight", String(profilePreferences.outputHeight || 500));
   const height = heightField.querySelector("input"); height.type = "number"; height.min = "320"; height.max = "3840"; height.step = "1";
   const applyResolution = () => {
-    const nextWidth = Math.max(320, Math.min(3840, Math.round(Number(width.value) || 1080)));
-    const nextHeight = Math.max(320, Math.min(3840, Math.round(Number(height.value) || 1920)));
+    const nextWidth = Math.max(320, Math.min(3840, Math.round(Number(width.value) || 500)));
+    const nextHeight = Math.max(320, Math.min(3840, Math.round(Number(height.value) || 500)));
     if (nextWidth * nextHeight > 8294400) return showAppToast("Resolusi melebihi batas 8,3 megapiksel.", "error");
     profilePreferences.outputWidth = nextWidth;
     profilePreferences.outputHeight = nextHeight;
@@ -940,7 +940,7 @@ async function loadCurrentProfile() {
   try {
     const result = await api("profile_get");
     currentUser = { ...currentUser, ...result.account };
-    profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "", ...(result.profile?.preferences || {}) };
+    profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 500, outputHeight: 500, sensitivity: 1, boostDb: 6, deviceId: "", ...(result.profile?.preferences || {}) };
     avatarScalePercent = Math.max(-100, Math.min(100, Math.round(Number(profilePreferences.avatarScalePercent) || 0)));
     roomOverrides = { scale: profilePreferences.scale, x: 0, y: 0, sensitivity: profilePreferences.sensitivity, boostDb: profilePreferences.boostDb, deviceId: profilePreferences.deviceId || "" };
     if (audio) audio.setOptions({ sensitivity: roomOverrides.sensitivity, boostDb: roomOverrides.boostDb, deviceId: roomOverrides.deviceId });
