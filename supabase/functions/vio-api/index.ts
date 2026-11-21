@@ -1157,7 +1157,18 @@ Deno.serve(async (req) => {
         }
         clean[key] = overrides[key];
       }
-      const { error } = await db.from("vio_room_overrides").upsert({ room_id: roomId, user_id: user.id, overrides: clean, updated_at: new Date().toISOString() }, { onConflict: "room_id,user_id" });
+      const { data: currentOverride, error: currentOverrideError } = await db.from("vio_room_overrides")
+        .select("overrides").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
+      if (currentOverrideError) throw currentOverrideError;
+      const stored = currentOverride?.overrides && typeof currentOverride.overrides === "object" && !Array.isArray(currentOverride.overrides)
+        ? currentOverride.overrides as Record<string, unknown>
+        : {};
+      // Each slider/checkbox submits a partial update. Preserve all the other
+      // layout, scale, audio, and composition-guide fields stored for this room.
+      const mergedOverrides = { ...stored, ...clean };
+      const { error } = await db.from("vio_room_overrides").upsert({
+        room_id: roomId, user_id: user.id, overrides: mergedOverrides, updated_at: new Date().toISOString()
+      }, { onConflict: "room_id,user_id" });
       if (error) throw error;
       return json({ ok: true });
     }

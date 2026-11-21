@@ -1,5 +1,5 @@
-import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-avatar-fallback-2";
-import { AudioEngine } from "./audio-engine.js?v=20261121-auto-mic-1";
+import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-ui-reorg-1";
+import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
 
 let config;
 let supabase;
@@ -65,7 +65,6 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     playerCanvas.width = Math.max(1, Math.round(stageWidth));
     playerCanvas.height = canvas.height;
     const renderer = new AvatarRenderer(playerCanvas);
-    renderer.start();
     entry = { canvas: playerCanvas, renderer, direct: drawDirectlyToStage };
     playerRenderers.set(member.user_id, entry);
   }
@@ -75,8 +74,6 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     playerCanvas.width = width;
     playerCanvas.height = canvas.height;
   }
-  renderer.setAssets(member.assets || {});
-  renderer.setAccessories(member.accessories || []);
   const overrides = member.overrides || {};
   const layoutX = Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (memberIndex - (members.length - 1) / 2) * 34;
   const preferences = {
@@ -86,11 +83,13 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
   };
   preferences.offsetX = Math.max(-100, Math.min(100, layoutX)) * width * 0.004;
   preferences.offsetY = Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * canvas.height * 0.0035;
+  // Apply the complete member profile before starting the direct Solo canvas loop.
+  // setPreferences configures both signed image and video backgrounds.
   renderer.setPreferences(preferences);
-  const background = preferences.background || {};
-  renderer.setBackgroundImage(background.mode === "image" ? background.src : null);
-  renderer.setBackgroundVideo(background.mode === "video" ? background.src : null);
+  renderer.setAssets(member.assets || {});
+  renderer.setAccessories(member.accessories || []);
   renderer.setState(states.get(member.user_id) || member.state || "idle");
+  if (!renderer.running) renderer.start();
   return entry;
 }
 
@@ -196,11 +195,12 @@ function drawCompositeFrame(now) {
         ctx.fillStyle = "#000000";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
-      if (showCenter) drawCenterGuide(ctx, canvas.width, canvas.height);
       visible.forEach(member => {
         const entry = playerRenderers.get(member.user_id);
         if (entry && !entry.direct) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
       });
+      // Guide is an overlay layer; it must sit above opaque member backgrounds.
+      if (showCenter) drawCenterGuide(ctx, canvas.width, canvas.height);
       if (showGrid) drawCompositionGrid(ctx, canvas.width, canvas.height);
     }
   }

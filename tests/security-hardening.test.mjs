@@ -466,3 +466,31 @@ test("AudioEngine retries a suspended context on the first invisible user intera
   assert.match(audio, /document\?\.addEventListener\?\.\(eventName, this\.resumeHandler, \{ capture: true, passive: true \}\)/);
   assert.match(audio, /this\.resumeHandler = \(\) => \{ this\.resume\(\)/);
 });
+
+
+test("room override writes merge partial updates with previously saved personal controls", () => {
+  const edge = read("supabase/functions/vio-api/index.ts");
+  const handler = edge.slice(edge.indexOf('if (action === "set_room_override")'), edge.indexOf('if (action === "record_asset")'));
+  assert.match(handler, /select\("overrides"\)[\s\S]*?maybeSingle\(\)/);
+  assert.match(handler, /const mergedOverrides = \{ \.\.\.stored, \.\.\.clean \}/);
+  assert.match(handler, /overrides: mergedOverrides/);
+});
+
+test("dummy composition guide is layered above opaque participant backgrounds in preview and OBS", () => {
+  const app = read("src/app.js");
+  const overlay = read("src/overlay.js");
+  const appDraw = app.slice(app.indexOf("function drawRoomStageFrame"), app.indexOf("async function leaveRoom"));
+  const overlayDraw = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
+  assert.ok(appDraw.indexOf("ctx.drawImage(entry.canvas") < appDraw.indexOf("drawRoomCenterGuide(ctx"));
+  assert.ok(overlayDraw.indexOf("ctx.drawImage(entry.canvas") < overlayDraw.indexOf("drawCenterGuide(ctx"));
+  assert.ok(appDraw.indexOf("drawRoomCenterGuide(ctx") < appDraw.indexOf("drawRoomCompositionGrid(ctx"));
+  assert.ok(overlayDraw.indexOf("drawCenterGuide(ctx") < overlayDraw.indexOf("drawCompositionGrid(ctx"));
+});
+
+test("OBS Solo renderer applies complete member preferences before its direct render loop starts", () => {
+  const overlay = read("src/overlay.js");
+  const renderer = overlay.slice(overlay.indexOf("function ensurePlayerRenderer"), overlay.indexOf("function updateLocalMicState"));
+  assert.ok(renderer.indexOf("renderer.setPreferences(preferences)") < renderer.indexOf("renderer.start()"));
+  assert.ok(renderer.indexOf("renderer.setPreferences(preferences)") < renderer.indexOf("renderer.setAssets(member.assets"));
+  assert.ok(renderer.includes("drawDirectlyToStage"));
+});

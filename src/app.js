@@ -2099,11 +2099,12 @@ function drawRoomStageFrame(now = performance.now()) {
     const visible = roomMembers.slice(0, 4);
     const showGrid = visible.some(member => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
     const showCenter = visible.some(member => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
-    if (showCenter) drawRoomCenterGuide(ctx, canvas.width, canvas.height);
     visible.forEach(member => {
       const entry = roomPreviewRenderers.get(member.user_id);
       if (entry?.canvas) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
     });
+    // The reference dummy is an overlay and must sit above opaque backgrounds.
+    if (showCenter) drawRoomCenterGuide(ctx, canvas.width, canvas.height);
     if (showGrid) drawRoomCompositionGrid(ctx, canvas.width, canvas.height);
   }
   renderFrame = requestAnimationFrame(drawRoomStageFrame);
