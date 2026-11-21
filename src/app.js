@@ -2017,6 +2017,9 @@ async function persistRoomLayout() {
     });
     if (!result?.override) console.warn("[CollabLayout] DB write returned no override row", result);
     lastPersistedRoomLayoutSignature = signature;
+    const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
+    if (ownMember) ownMember.overrides = { ...(result.override?.overrides || snapshot) };
+    renderRoomParticipants();
     await broadcastPlayerLayout();
   } catch (error) {
     console.error("[CollabLayout] DB write failed", {
