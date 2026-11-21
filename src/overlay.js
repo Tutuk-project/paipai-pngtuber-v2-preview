@@ -237,12 +237,26 @@ function drawCompositeFrame(now) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const visible = members.slice(0, 4);
     if (visible.length) {
-      if (centerGuideEnabled || visible.some(member => member.overrides?.showCenterGuide === true)) drawCenterGuide(ctx, canvas.width, canvas.height);
+      const isCollaboration = roomPurpose === "collaboration";
+      const showCenter = isCollaboration && (
+        centerGuideEnabled || visible.some(member => member.overrides?.showCenterGuide === true)
+      );
+      const showGrid = isCollaboration && (
+        gridEnabled || visible.some(member => member.overrides?.showGrid === true)
+      );
+
+      // Collaboration output is opaque black only while a composition guide
+      // is enabled. With both guide layers disabled, the canvas stays alpha.
+      if (showCenter || showGrid) {
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      if (showCenter) drawCenterGuide(ctx, canvas.width, canvas.height);
       visible.forEach(member => {
         const entry = playerRenderers.get(member.user_id);
         if (entry && !entry.direct) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
       });
-      if (gridEnabled || visible.some(member => member.overrides?.showGrid === true)) drawCompositionGrid(ctx, canvas.width, canvas.height);
+      if (showGrid) drawCompositionGrid(ctx, canvas.width, canvas.height);
     }
   }
   compositeRaf = requestAnimationFrame(drawCompositeFrame);
@@ -315,11 +329,16 @@ async function refreshMembers() {
   if (hostMember) localMicUserId = hostMember.user_id;
   const output = hostMember?.preferences || {};
   const isCollaborationRoom = roomPurpose === "collaboration";
+  const requestedWidth = Number(params.get("width")) || 1920;
+  const requestedHeight = Number(params.get("height")) || 1080;
+  const validCollaborationSize = requestedWidth >= 320 && requestedWidth <= 3840
+    && requestedHeight >= 320 && requestedHeight <= 3840
+    && requestedWidth * requestedHeight <= 8294400;
   const width = isCollaborationRoom
-    ? 1920
+    ? (validCollaborationSize ? Math.round(requestedWidth) : 1920)
     : Math.max(320, Math.min(3840, Math.round(Number(output.outputWidth) || 500)));
   const height = isCollaborationRoom
-    ? 1080
+    ? (validCollaborationSize ? Math.round(requestedHeight) : 1080)
     : Math.max(320, Math.min(3840, Math.round(Number(output.outputHeight) || 500)));
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   canvas.style.aspectRatio = `${width} / ${height}`;
@@ -360,7 +379,6 @@ async function refreshMembers() {
 async function boot() {
   try {
     if (!canvas || !ctx) throw new Error("Canvas OBS tidak ditemukan di halaman overlay.");
-    bindOverlayControls();
     setStatus("Membaca kredensial overlay…");
     const configModule = await import("./config.js");
     config = configModule.VIO_CONFIG;
@@ -388,6 +406,10 @@ async function boot() {
 
     setStatus("Memuat peserta dan aset avatar…");
     await refreshMembers();
+    // Every Solo and Collaboration overlay requests microphone access as soon
+    // as the host identity is known. The browser/CEF permission prompt is the
+    // only valid way to authorize capture; Creator broadcasts remain fallback.
+    if (localMicUserId) void startOverlayMicrophone();
     channel = supabase.channel(`room:${roomId}`, { config: { private: true } })
       .on("broadcast", { event: "player-state" }, ({ payload }) => {
         if (!payload?.user_id || !["idle", "talking"].includes(payload.state)) return;
@@ -435,7 +457,9 @@ async function boot() {
       if (debugMode) setStatus(realtimeConnected ? "Realtime connected" : "Realtime unavailable · polling fallback active", !realtimeConnected);
       else clearStatus();
     }
-    // Mic is deliberately user-activated for Android WebView permission rules.
+    // Microphone permission was requested automatically after the room host
+    // was resolved above. If capture is denied, Creator-side state broadcasts
+    // remain active and the browser permission must be granted in site settings.
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
       pollOverlayState().catch(error => { if (debugMode) setStatus("Polling overlay gagal: " + error.message, true); });
