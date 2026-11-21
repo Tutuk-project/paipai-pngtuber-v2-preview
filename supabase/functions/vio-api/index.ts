@@ -990,7 +990,7 @@ Deno.serve(async (req) => {
       }
       const signedPreferences = await signBackground(db, profile?.preferences || {});
       let accessoryQuery = db.from("vio_character_accessories")
-        .select("id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order")
+        .select("id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order")
         .eq("user_id", user.id).order("sort_order");
       if (characterId) accessoryQuery = accessoryQuery.eq("character_id", characterId);
       else accessoryQuery = accessoryQuery.eq("character_id", "00000000-0000-0000-0000-000000000000");
@@ -999,7 +999,7 @@ Deno.serve(async (req) => {
       const signedAccessories = await Promise.all((accessories || []).map(async (item: any) => {
         const { data, error: signError } = await db.storage.from(item.bucket_id).createSignedUrl(item.storage_path, 3600);
         if (signError || !data?.signedUrl) return null;
-        return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
+        return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation || 0, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
       }));
       return json({
         ok: true, character_id: characterId, assets: signedAssets,
@@ -1132,7 +1132,7 @@ Deno.serve(async (req) => {
         const accessories = await Promise.all((activeCharacter?.vio_character_accessories || []).map(async (item: any) => {
           const { data, error: signError } = await db.storage.from(item.bucket_id).createSignedUrl(item.storage_path, 3600);
           if (signError || !data?.signedUrl) return null;
-          return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
+          return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation || 0, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
         return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
       }));
@@ -1277,11 +1277,11 @@ Deno.serve(async (req) => {
       const user = requireUser();
       const accessoryId = String(body.accessory_id || "");
       const updates: Record<string, unknown> = {};
-      for (const key of ["x", "y", "w", "h"] as const) {
+      for (const key of ["x", "y", "w", "h", "rotation"] as const) {
         if (body[key] === undefined) continue;
         const value = Number(body[key]);
-        const min = key === "w" || key === "h" ? 0.01 : 0;
-        const max = key === "w" || key === "h" ? 2 : 1;
+        const min = key === "w" || key === "h" ? 0.01 : key === "rotation" ? -180 : 0;
+        const max = key === "w" || key === "h" ? 2 : key === "rotation" ? 180 : 1;
         if (!Number.isFinite(value) || value < min || value > max) return json({ ok: false, error: `Invalid accessory ${key}.` }, 400);
         updates[key] = value;
       }
@@ -1370,7 +1370,7 @@ Deno.serve(async (req) => {
         const accessories = await Promise.all((character?.vio_character_accessories || []).map(async (item: any) => {
           const { data, error: signError } = await db.storage.from(item.bucket_id).createSignedUrl(item.storage_path, 3600);
           if (signError || !data?.signedUrl) return null;
-          return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
+          return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation || 0, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
         return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
       }));
