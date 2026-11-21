@@ -301,3 +301,18 @@ test("Collaboration uses a single landscape stage with bold grid and center guid
   assert.match(backend, /"showCenterGuide"/);
   assert.match(html, /height:auto!important/);
 });
+
+
+test("clean OBS link stays menu-free while a separate control-enabled link is available", () => {
+  const app = read("src/app.js");
+  const html = read("index.html");
+  const start = app.indexOf('$("copyOverlayControlsLink").addEventListener');
+  const end = app.indexOf('$("openOverlayPreview")', start);
+  const handler = app.slice(start, end > start ? end : start + 900);
+  assert.match(handler, /searchParams\.set\("controls", "1"\)/);
+  assert.match(html, /id="copyOverlayControlsLink"/);
+  const generatorStart = app.indexOf("async function generateOverlayLink(");
+  const generatorEnd = app.indexOf("async function loadAdminOverview", generatorStart);
+  const generator = app.slice(generatorStart, generatorEnd);
+  assert.doesNotMatch(generator, /searchParams\.set\("controls"/);
+});
