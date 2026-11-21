@@ -164,7 +164,10 @@ export class AvatarRenderer {
   setAssets(assets = {}) {
     const nextAssets = { ...assets };
     const nextAssetIdentity = JSON.stringify(
-      Object.entries(nextAssets).filter(([, src]) => Boolean(src)).sort(([a], [b]) => a.localeCompare(b))
+      Object.entries(nextAssets)
+        .filter(([, src]) => Boolean(src))
+        .map(([state, src]) => [state, String(src).split("#", 1)[0].split("?", 1)[0]])
+        .sort(([a], [b]) => a.localeCompare(b))
     );
     // A last-good frame is safe only within the same character asset set.
     // Otherwise a character switch can display the previous character while
