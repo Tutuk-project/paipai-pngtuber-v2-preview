@@ -902,7 +902,26 @@ function renderAboutWorkspace(content) {
   const contact = document.createElement("section"); contact.className = "about-section";
   const contactTitle = document.createElement("h3"); contactTitle.textContent = "Admin contact";
   const contactText = document.createElement("p"); contactText.className = "muted"; contactText.textContent = "Belum ditambahkan.";
-  contact.append(contactTitle, contactText); content.append(intro, audience, links, embeds, contact);
+  contact.append(contactTitle, contactText);
+
+  // Keep the account display-name control that previously lived in Profile.
+  const account = document.createElement("section"); account.className = "about-section";
+  const accountTitle = document.createElement("h3"); accountTitle.textContent = "Account details";
+  const username = settingField("Username", "aboutUsername", currentUser?.username || "", "Username akun dikelola Admin.");
+  username.querySelector("input").readOnly = true;
+  const displayName = settingField("Display name", "aboutDisplayName", currentUser?.display_name || currentUser?.username || "");
+  const saveName = actionButton("Simpan display name", async () => {
+    const nextName = $("aboutDisplayName")?.value.trim();
+    if (!nextName) return showAppToast("Display name tidak boleh kosong.", "error");
+    try {
+      await api("profile_save", { display_name: nextName, preferences: profilePreferences });
+      currentUser.display_name = nextName;
+      renderNavigation();
+      showAppToast("Display name berhasil disimpan");
+    } catch (error) { showAppToast("Gagal menyimpan display name: " + error.message, "error"); }
+  }, true);
+  account.append(accountTitle, username, displayName, saveName);
+  content.append(intro, audience, links, embeds, contact, account);
 }
 function renderSettings(menuId) {
   const content = $("settingsContent");

@@ -24,6 +24,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install SQL validation dependency
+        run: python -m pip install pglast
       - name: Run regression tests
         run: npm test
       - name: Check JavaScript syntax and migrations

@@ -459,5 +459,5 @@ test("Visual+ excludes background settings and Avatar includes them", () => {
 test("About describes the project and retains empty embed/contact placeholders", () => {
   const app = read("src/app.js"); const start = app.indexOf("function renderAboutWorkspace(content)");
   const end = app.indexOf("function renderSettings(menuId)", start); const body = app.slice(start, end);
-  for (const text of ["Vio Studio adalah workspace PNGTuber modular", "Dibuat untuk", "Embed links", "Admin contact"]) assert.ok(body.includes(text));
+  for (const text of ["Vio Studio adalah workspace PNGTuber modular", "Dibuat untuk", "Embed links", "Admin contact", "Account details", "Simpan display name"]) assert.ok(body.includes(text));
 });

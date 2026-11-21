@@ -28,3 +28,6 @@
 - Added regression tests for override merge semantics, guide draw order, Solo renderer initialization, menu responsibility, and retained animation/background/accessory controls.
 - Added npm test/check scripts and a GitHub Actions validation workflow.
 - Runtime verification is still required in Chrome Android and the target OBS Browser Source/CEF host, particularly microphone permission and Solo background rendering.
+## UI preservation note
+- The editable display name and read-only Admin-managed username from the former Profile workspace remain available under About > Account details.
+- The mobile Settings tab remains a stage-preview shortcut and does not replace the workspace tabs.
