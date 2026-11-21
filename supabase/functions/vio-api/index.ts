@@ -1120,7 +1120,7 @@ Deno.serve(async (req) => {
       const { data: membership, error: membershipError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
       if (membershipError) throw membershipError;
       if (!membership) return json({ ok: false, error: "You are not a member of this room." }, 403);
-      const { data: members, error } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,name,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides)").eq("room_id", roomId);
+      const { data: members, error } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,name,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides,updated_at)").eq("room_id", roomId);
       if (error) throw error;
       const mapped = await Promise.all((members || []).map(async (member: any) => {
         const activeCharacter = (member.vio_app_users?.characters || []).find((item: any) => item.id === member.vio_app_users?.profile?.active_character_id) || member.vio_characters?.[0];
@@ -1134,7 +1134,7 @@ Deno.serve(async (req) => {
           if (signError || !data?.signedUrl) return null;
           return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation || 0, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
-        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
+        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {}, overrides_updated_at: member.vio_room_overrides?.[0]?.updated_at || null };
       }));
       return json({ ok: true, members: mapped });
     }
@@ -1166,11 +1166,12 @@ Deno.serve(async (req) => {
       // Each slider/checkbox submits a partial update. Preserve all the other
       // layout, scale, audio, and composition-guide fields stored for this room.
       const mergedOverrides = { ...stored, ...clean };
-      const { error } = await db.from("vio_room_overrides").upsert({
+      const { data: savedOverride, error } = await db.from("vio_room_overrides").upsert({
         room_id: roomId, user_id: user.id, overrides: mergedOverrides, updated_at: new Date().toISOString()
-      }, { onConflict: "room_id,user_id" });
+      }, { onConflict: "room_id,user_id" })
+        .select("room_id,user_id,overrides,updated_at").single();
       if (error) throw error;
-      return json({ ok: true });
+      return json({ ok: true, override: savedOverride });
     }
 
     if (action === "record_asset") {
@@ -1342,11 +1343,12 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Overlay link is invalid or room is closed or expired." }, 403);
       }
       const { data: rows, error: memberError } = await db.from("vio_room_members")
-        .select("user_id,state,vio_room_overrides(overrides)").eq("room_id", roomId);
+        .select("user_id,state,vio_room_overrides(overrides,updated_at)").eq("room_id", roomId);
       if (memberError) throw memberError;
       return json({ ok: true, members: (rows || []).map((member: any) => ({
         user_id: member.user_id, state: member.state || "idle",
-        overrides: member.vio_room_overrides?.[0]?.overrides || {}
+        overrides: member.vio_room_overrides?.[0]?.overrides || {},
+        updated_at: member.vio_room_overrides?.[0]?.updated_at || null
       })) });
     }
 
