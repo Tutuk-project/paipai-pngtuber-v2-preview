@@ -1,5 +1,5 @@
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
-import { AvatarRenderer, resolveRoomAvatarPreferences, sortRoomMembers } from "./avatar-renderer.js?v=20261121-collab-room-composite-1";
+import { AvatarRenderer, mergeRoomMemberOverrides, resolveRoomAvatarLayouts, resolveRoomBackgroundPreferences, sortRoomMembers } from "./avatar-renderer.js?v=20261121-collab-room-composite-1";
 
 const $ = (id) => document.getElementById(id);
 const viewIds = ["loginGate", "editorView", "collaborationView", "adminView", "overlayView"];
@@ -1753,8 +1753,7 @@ function renderRoomControls(options = {}) {
   const centerText = document.createElement("span"); centerText.textContent = "Tampilkan karakter patokan di tengah frame";
   centerToggle.addEventListener("change", async () => {
     roomOverrides.showCenterGuide = centerToggle.checked;
-    const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
-    if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), showCenterGuide: roomOverrides.showCenterGuide };
+    roomMembers = mergeRoomMemberOverrides(roomMembers, currentUser?.id, currentUser?.id, { showCenterGuide: roomOverrides.showCenterGuide });
     renderRoomParticipants();
     try { await api("set_room_override", { room_id: currentRoom.id, overrides: { showCenterGuide: roomOverrides.showCenterGuide } }); await broadcastPlayerLayout(); }
     catch (error) { showToast("Center guide gagal disimpan: " + error.message, "error"); }
@@ -1770,8 +1769,7 @@ function renderRoomControls(options = {}) {
   gridText.textContent = "Tampilkan grid komposisi 3×3 di preview dan OBS";
   gridToggle.addEventListener("change", async () => {
     roomOverrides.showGrid = gridToggle.checked;
-    const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
-    if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), showGrid: roomOverrides.showGrid };
+    roomMembers = mergeRoomMemberOverrides(roomMembers, currentUser?.id, currentUser?.id, { showGrid: roomOverrides.showGrid });
     renderRoomParticipants();
     try {
       await api("set_room_override", { room_id: currentRoom.id, overrides: { showGrid: roomOverrides.showGrid } });
@@ -1840,8 +1838,7 @@ function renderRoomControls(options = {}) {
     range.addEventListener("input", () => {
       const value = Number(range.value);
       roomOverrides[item.key] = value;
-      const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
-      if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), [item.key]: value };
+      roomMembers = mergeRoomMemberOverrides(roomMembers, currentUser?.id, currentUser?.id, { [item.key]: value });
       output.textContent = item.format(value);
       if (item.key === "sensitivity" || item.key === "boostDb") audio?.setOptions({ [item.key]: value });
       const isLayoutControl = ["scale", "x", "y"].includes(item.key);
@@ -1917,13 +1914,9 @@ async function subscribeRoom(roomId) {
       renderRoomParticipants();
     })
     .on("broadcast", { event: "player-layout" }, ({ payload }) => {
-      if (!payload?.user_id || !payload.overrides) return;
-      const seq = Number(payload.seq) || 0;
-      if (seq && seq <= (remoteLayoutSequences.get(payload.user_id) || 0)) return;
-      if (seq) remoteLayoutSequences.set(payload.user_id, seq);
-      const member = roomMembers.find(item => item.user_id === payload.user_id);
-      if (member) member.overrides = { ...(member.overrides || {}), ...payload.overrides };
-      renderRoomParticipants();
+      if (!payload?.user_id) return;
+      // Broadcast data is an invalidation hint, never authoritative layout data.
+      loadRoomMembers().catch(console.warn);
     })
     .on("broadcast", { event: "member-assets-updated" }, ({ payload }) => {
       if (!payload?.user_id || payload.user_id === currentUser.id) return;
@@ -1966,21 +1959,20 @@ async function broadcastPlayerState(state) {
 
 async function broadcastPlayerLayout() {
   if (!roomChannel || !currentRoom) return;
-  const { scale, x, y, showGrid, showCenterGuide } = roomOverrides;
-  const payload = { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid, showCenterGuide }, at: Date.now() };
+  const payload = { user_id: currentUser.id, seq: ++layoutSequence, at: Date.now() };
   const startedAt = Date.now();
   try {
     const result = await roomChannel.send({ type: "broadcast", event: "player-layout", payload });
     console.info("[CollabLayout] broadcast result", {
       status: result, member_id: payload.user_id, seq: payload.seq,
-      x: payload.overrides.x, y: payload.overrides.y, scale: payload.overrides.scale,
+      event: "database-snapshot-invalidation",
       elapsed_ms: Date.now() - startedAt
     });
     if (result !== "ok") console.warn("[CollabLayout] broadcast did not return ok", result, payload);
     return result;
   } catch (error) {
     console.error("[CollabLayout] broadcast error", {
-      member_id: payload.user_id, seq: payload.seq, overrides: payload.overrides, error
+      member_id: payload.user_id, seq: payload.seq, error
     });
     throw error;
   }
@@ -2017,8 +2009,7 @@ async function persistRoomLayout() {
     });
     if (!result?.override) console.warn("[CollabLayout] DB write returned no override row", result);
     lastPersistedRoomLayoutSignature = signature;
-    const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
-    if (ownMember) ownMember.overrides = { ...(result.override?.overrides || snapshot) };
+    roomMembers = mergeRoomMemberOverrides(roomMembers, currentUser?.id, currentUser?.id, result.override?.overrides || snapshot);
     renderRoomParticipants();
     await broadcastPlayerLayout();
   } catch (error) {
@@ -2112,19 +2103,15 @@ async function loadRoomMembers() {
 
 function renderRoomParticipants() {
   const canvas = $("roomStage");
-  const visible = roomMembers.slice(0, 4);
-  // Collaboration uses its own shared landscape canvas; it must not inherit
-  // a participant's portrait Solo/stream profile resolution.
-  const width = 1920;
-  const height = 1080;
+  const width = 1920, height = 1080;
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   canvas.style.aspectRatio = "16 / 9";
   const ctx = canvas.getContext("2d");
   const tags = $("participantNames");
   tags.replaceChildren();
   const notice = $("roomStageNotice");
+  const visible = resolveRoomAvatarLayouts(roomMembers, width, height).slice(0, 4);
   $("participantCount").textContent = `${visible.length} / ${currentRoom?.capacity || 4} participants`;
-
   if (!visible.length) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (renderFrame) cancelAnimationFrame(renderFrame);
@@ -2139,72 +2126,43 @@ function renderRoomParticipants() {
     }
     return;
   }
-
-  const hasAvatarAssets = visible.some(member => Object.values(member.assets || {}).some(Boolean));
+  const hasAvatarAssets = visible.some(({ member }) => Object.values(member.assets || {}).some(Boolean));
   if (notice) {
-    notice.textContent = hasAvatarAssets
-      ? ""
-      : "Peserta sudah terdaftar, tetapi PNG avatar belum tersedia. Unggah setidaknya ekspresi Idle di menu Character.";
+    notice.textContent = hasAvatarAssets ? "" : "Peserta sudah terdaftar, tetapi PNG avatar belum tersedia. Unggah setidaknya ekspresi Idle di menu Character.";
     notice.hidden = hasAvatarAssets;
     notice.classList.remove("is-error");
   }
-
-  const hostMember = visible.find(member => member.is_host);
-  const hostBackground = hostMember?.preferences?.background || { mode: "transparent" };
+  const hostBackground = resolveRoomBackgroundPreferences(roomMembers);
   const hostBackgroundKey = JSON.stringify(hostBackground);
   if (!roomBackgroundRenderer) roomBackgroundRenderer = new AvatarRenderer(document.createElement("canvas"));
   if (roomBackgroundProfileKey !== hostBackgroundKey) {
-    roomBackgroundRenderer.setPreferences({ background: hostBackground });
+    roomBackgroundRenderer.setPreferences(hostBackground);
     roomBackgroundProfileKey = hostBackgroundKey;
   }
-
-  const visibleIds = new Set(visible.map(member => member.user_id));
+  const visibleIds = new Set(visible.map(({ member }) => member.user_id));
   for (const [userId, entry] of roomPreviewRenderers) {
-    if (!visibleIds.has(userId)) {
-      entry.renderer.stop();
-      roomPreviewRenderers.delete(userId);
-    }
+    if (!visibleIds.has(userId)) { entry.renderer.stop(); roomPreviewRenderers.delete(userId); }
   }
-
-  for (const [index, member] of visible.entries()) {
+  for (const { member, spriteProfile, preferences } of visible) {
     let entry = roomPreviewRenderers.get(member.user_id);
     if (!entry) {
       const playerCanvas = document.createElement("canvas");
       entry = { canvas: playerCanvas, renderer: new AvatarRenderer(playerCanvas), profileKey: "", assetsKey: "", accessoriesKey: "" };
       roomPreviewRenderers.set(member.user_id, entry);
     }
-    const playerWidth = Math.max(1, Math.round(canvas.width));
-    const playerHeight = Math.max(1, canvas.height);
+    const playerWidth = Math.max(1, Math.round(canvas.width)), playerHeight = Math.max(1, canvas.height);
     if (entry.canvas.width !== playerWidth || entry.canvas.height !== playerHeight) {
-      entry.canvas.width = playerWidth;
-      entry.canvas.height = playerHeight;
+      entry.canvas.width = playerWidth; entry.canvas.height = playerHeight;
     }
-    const overrides = member.overrides || {};
-    const profile = member.preferences || {};
-    const spriteProfile = { ...profile, background: { mode: "transparent" } };
-    const preferences = resolveRoomAvatarPreferences(spriteProfile, overrides, playerWidth, playerHeight, index, visible.length);
     const profileKey = JSON.stringify(spriteProfile);
-    const assets = member.assets || {};
-    const assetsKey = JSON.stringify(assets);
-    const accessories = member.accessories || [];
-    const accessoriesKey = JSON.stringify(accessories);
-    if (entry.profileKey !== profileKey) {
-      entry.renderer.setPreferences(spriteProfile);
-      entry.profileKey = profileKey;
-    }
-    if (entry.assetsKey !== assetsKey) {
-      entry.renderer.setAssets(assets);
-      entry.assetsKey = assetsKey;
-    }
-    if (entry.accessoriesKey !== accessoriesKey) {
-      entry.renderer.setAccessories(accessories);
-      entry.accessoriesKey = accessoriesKey;
-    }
-    // X/Y/scale changes must not rebuild the user's background image/video.
+    const assets = member.assets || {}, assetsKey = JSON.stringify(assets);
+    const accessories = member.accessories || [], accessoriesKey = JSON.stringify(accessories);
+    if (entry.profileKey !== profileKey) { entry.renderer.setPreferences(spriteProfile); entry.profileKey = profileKey; }
+    if (entry.assetsKey !== assetsKey) { entry.renderer.setAssets(assets); entry.assetsKey = assetsKey; }
+    if (entry.accessoriesKey !== accessoriesKey) { entry.renderer.setAccessories(accessories); entry.accessoriesKey = accessoriesKey; }
     entry.renderer.setRoomLayout(preferences);
     entry.renderer.setState(member.state === "talking" ? "talking" : "idle");
     entry.renderer.start();
-
     const state = member.state === "talking" ? "talking" : "idle";
     const tag = document.createElement("span");
     tag.className = `participant-tag ${state === "talking" ? "is-talking" : ""}`;
@@ -2264,10 +2222,10 @@ function drawRoomStageFrame(now = performance.now()) {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     roomBackgroundRenderer?.drawBackgroundTo(ctx, canvas.width, canvas.height);
-    const visible = sortRoomMembers(roomMembers).slice(0, 4);
-    const showGrid = visible.some(member => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
-    const showCenter = visible.some(member => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
-    visible.forEach(member => {
+    const visible = resolveRoomAvatarLayouts(roomMembers, canvas.width, canvas.height).slice(0, 4);
+    const showGrid = visible.some(({ member }) => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
+    const showCenter = visible.some(({ member }) => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
+    visible.forEach(({ member }) => {
       const entry = roomPreviewRenderers.get(member.user_id);
       if (entry?.canvas) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
     });
