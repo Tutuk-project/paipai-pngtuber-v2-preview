@@ -1,21 +1,18 @@
-# Vio Studio v2.0 — Mobile Navigation UI Checkpoint
+# Vio Studio v2.0 — Mobile Navigation UI Experiment
 Date: 2026-11-21
 
-## Request
-Move the mobile side navigation to a bottom navigation dock matching the supplied reference direction, while retaining Vio Studio's original logo, original menu icons, and menu names. Avoid changing application navigation semantics or other systems.
+## Original request
+Move the mobile side navigation to the bottom while retaining Vio Studio's original logo, original menu icons, and menu names.
 
-## Changes
-- `assets/app.css`: at viewport widths up to 900px, the sidebar becomes a fixed bottom dock with horizontal scrolling, safe-area spacing, translucent Vio styling, and vertically stacked original icons plus visible labels.
-- The original Vio Studio brand mark and brand copy remain at the top of the screen in a fixed header strip.
-- Workspace top/bottom padding accounts for the brand strip and bottom dock.
-- The Collaboration room view also receives the bottom navigation on mobile; it no longer hides the sidebar in this breakpoint.
-- `src/app.js`: the existing Logout button is moved into the bottom navigation on mobile and returned to its original sidebar footer on wider screens. Its existing event listener and logout function are unchanged.
-- Desktop/tablet widths above 900px retain the existing collapsible left sidebar.
-- No changes to Supabase, API actions, microphone, renderer, room state, overlay generation, or profile data.
+## Experiment and regression
+The first implementation forced the complete sidebar into a fixed bottom dock and moved the Logout button between DOM parents using a viewport check in JavaScript. This was too invasive and caused a reported project regression. The automatic validation passing did not establish runtime compatibility across all views.
 
-## Regression test
-Added a source test checking brand retention, bottom navigation layout, icon/label visibility, logout placement, and safe-area support.
+## Rollback performed
+- Removed the fixed bottom-dock CSS rules.
+- Restored the original responsive/collapsible sidebar layout.
+- Restored the original Logout button DOM placement under `.sidebar-bottom`; its existing action/listener remains unchanged.
+- Added a regression test to ensure navigation does not move Logout into the navigation element or depend on viewport JS for DOM relocation.
+- Retained all unrelated renderer, Collaboration, profile, microphone, overlay, and backend code.
 
-## Verification
-- Pending GitHub Actions validation and Pages deployment for the UI-only commit.
-- Real-device visual check is still required on Android Chrome at narrow phone widths and tablet/desktop widths.
+## Current status
+The bottom-navigation design experiment is rolled back. The app should be tested again on Android Chrome and Collaboration after the latest Preview deployment. A safer visual redesign should be done using a dedicated mobile navigation container that does not repurpose the existing sidebar or move live controls between DOM parents.
