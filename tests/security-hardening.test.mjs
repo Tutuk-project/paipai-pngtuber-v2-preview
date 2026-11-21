@@ -188,27 +188,28 @@ test("room layout sliders update the local member renderer immediately", () => {
   assert.match(stage, /member\.user_id === currentUser\.id[\s\S]*?\.\.\.roomOverrides/);
 });
 
-test("OBS overlay exposes gesture-based microphone controls while keeping rendering on canvas", () => {
+test("OBS overlay automatically requests microphone access for Solo and Collaboration", () => {
   const overlay = read("src/overlay.js");
   const html = read("overlay.html");
   assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
-  assert.match(overlay, /startOverlayMicrophone/);
-  assert.match(overlay, /bindOverlayControls/);
-  assert.match(overlay, /updateLocalMicState/);
-  assert.match(html, /id="overlayMicToggle"/);
+  assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
+  assert.match(overlay, /navigator\.mediaDevices\?\.getUserMedia/);
+  assert.match(overlay, /Creator-side state broadcasts remain active/);
   assert.match(html, /<canvas id="stage"/);
+  assert.doesNotMatch(html, /overlayMicToggle|overlayMicDevice|overlayControls/);
 });
 
-test("generated OBS links keep Solo clean and expose controls for Collaboration", () => {
+test("generated Solo and Collaboration OBS links never enable editor controls", () => {
   const app = read("src/app.js");
+  const html = read("index.html");
   const start = app.indexOf("async function generateOverlayLink(");
   const end = app.indexOf("async function loadAdminOverview", start);
   const generator = app.slice(start, end);
   assert.ok(generator.includes("url.hash = new URLSearchParams"));
-  assert.ok(generator.includes('if (room.purpose === "collaboration") url.searchParams.set("controls", "1")'));
-  assert.ok(generator.includes('$("copyOverlayControlsLink").hidden = room.purpose !== "collaboration"'));
+  assert.ok(!generator.includes('searchParams.set("controls", "1")'));
+  assert.ok(!html.includes('id="copyOverlayControlsLink"'));
+  assert.match(html, /id="copyOverlayLink"/);
 });
-
 
 test("overlay API returns room purpose for Solo or Collaboration rendering", () => {
   const edge = read("supabase/functions/vio-api/index.ts");
@@ -258,7 +259,7 @@ test("Solo renderer publishes complete bounded frames without clearing visible O
   const renderer = read("src/avatar-renderer.js");
   assert.match(renderer, /1280 \/ Math\.max\(outputWidth, outputHeight\)/);
   assert.match(renderer, /this\.renderCanvas/);
-  assert.match(renderer, /if \(hasAvatar \|\| this\.accessories\.some/);
+  assert.match(renderer, /if \(hasAvatar \|\| hasAccessories \|\| hasOpaqueBackground\)/);
   assert.match(renderer, /output\.drawImage\(this\.renderCanvas/);
   assert.doesNotMatch(renderer, /const rows = 48/);
 });
@@ -282,14 +283,12 @@ test("OBS overlay keeps working when Realtime channel subscription fails", () =>
   assert.doesNotMatch(overlay, /reject\(new Error\(\`Realtime channel error/);
 });
 
-test("OBS overlay microphone is user-activated and exposes device selection", () => {
-  const overlay = read("src/overlay.js");
+test("OBS overlay has no visible buttons or control panels in either mode", () => {
   const html = read("overlay.html");
-  assert.match(overlay, /function bindOverlayControls/);
-  assert.match(overlay, /startOverlayMicrophone\(\)/);
-  assert.match(overlay, /navigator\.mediaDevices\?\.enumerateDevices/);
-  assert.match(html, /id="overlayMicToggle"/);
-  assert.match(html, /id="overlayMicDevice"/);
+  const overlay = read("src/overlay.js");
+  assert.doesNotMatch(html, /<button|<select|overlay-controls|overlayControlsShow/);
+  assert.match(html, /\.debug \.status\{display:block\}/);
+  assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
 });
 
 test("Collaboration uses a single landscape stage with bold grid and center guide", () => {
@@ -308,17 +307,23 @@ test("Collaboration uses a single landscape stage with bold grid and center guid
 });
 
 
-test("clean OBS link stays menu-free while a separate control-enabled link is available", () => {
+test("Solo and Collaboration OBS outputs are menu-free and Collaboration size follows preview", () => {
   const app = read("src/app.js");
   const html = read("index.html");
+  const overlayHtml = read("overlay.html");
+  const overlay = read("src/overlay.js");
   const generatorStart = app.indexOf("async function generateOverlayLink(");
   const generatorEnd = app.indexOf("async function loadAdminOverview", generatorStart);
   const generator = app.slice(generatorStart, generatorEnd);
-  assert.ok(generator.includes('if (room.purpose === "collaboration") url.searchParams.set("controls", "1");'));
-  assert.match(html, /id="copyOverlayControlsLink"/);
-  assert.ok(generator.includes('$("copyOverlayControlsLink").hidden = room.purpose !== "collaboration";'));
+  assert.ok(!generator.includes('searchParams.set("controls", "1")'));
+  assert.match(generator, /const stage = \$\("roomStage"\)/);
+  assert.match(generator, /url\.searchParams\.set\("width", String\(width\)\)/);
+  assert.match(generator, /url\.searchParams\.set\("height", String\(height\)\)/);
+  assert.doesNotMatch(overlayHtml, /<button|<select|overlayControls/);
+  assert.match(overlay, /const requestedWidth = Number\(params\.get\("width"\)\) \|\| 1920/);
+  assert.match(overlay, /const requestedHeight = Number\(params\.get\("height"\)\) \|\| 1080/);
+  assert.doesNotMatch(html, /copyOverlayControlsLink/);
 });
-
 
 test("AudioEngine reduces mic detection latency without removing noise gating", () => {
   const audio = read("src/audio-engine.js");
@@ -411,4 +416,25 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
   assert.match(html, /id="avatarCanvas"/);
   assert.match(html, /id="roomStage"/);
   assert.match(html, /src="\.\/src\/app\.js\?v=/);
+});
+
+
+test("Collaboration OBS uses black only while guide layers are enabled, otherwise transparent", () => {
+  const overlay = read("src/overlay.js");
+  const draw = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
+  assert.match(draw, /const isCollaboration = roomPurpose === "collaboration"/);
+  assert.match(draw, /if \(showCenter \|\| showGrid\)/);
+  assert.match(draw, /ctx\.fillStyle = "#000000"/);
+  assert.match(draw, /ctx\.clearRect\(0, 0, canvas\.width, canvas\.height\)/);
+  assert.match(draw, /if \(showCenter\) drawCenterGuide/);
+  assert.match(draw, /if \(showGrid\) drawCompositionGrid/);
+});
+
+test("AvatarRenderer preserves the last decoded PNG while a new expression is loading", () => {
+  const renderer = read("src/avatar-renderer.js");
+  assert.match(renderer, /this\.lastGoodAvatarImage = null/);
+  assert.match(renderer, /const decodedAvatar = candidates\.find\(item => item\.complete && item\.naturalWidth\)/);
+  assert.match(renderer, /const image = decodedAvatar \|\| lastGood \|\| candidates\.find\(item => !item\.complete\)/);
+  assert.match(renderer, /this\.lastGoodAvatarImage = decodedAvatar/);
+  assert.match(renderer, /else if \(!pendingAvatar && !this\.lastGoodAvatarImage\)/);
 });
