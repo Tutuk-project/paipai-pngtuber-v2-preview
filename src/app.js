@@ -2075,6 +2075,7 @@ async function generateOverlayLink(button = null) {
     // Keep the generated OBS source clean: microphone state comes from the Creator session.
     // Collaboration guides are controlled in Creator and broadcast to the overlay.
     if (room.purpose === "collaboration") url.searchParams.set("controls", "1");
+    $("copyOverlayControlsLink").hidden = room.purpose !== "collaboration";
     generatedOverlayUrl = url.toString();
     $("overlayLinkUrl").value = generatedOverlayUrl;
     syncOverlayGeneratorButtons("Salin Link", false, "copy");
