@@ -25,10 +25,7 @@ const statusEl = document.getElementById("status");
 const debugMode = new URLSearchParams(location.search).get("debug") === "1";
 const params = new URLSearchParams(location.search);
 let centerGuideEnabled = params.get("centerGuide") === "1";
-let controlsVisible = params.get("controls") === "1";
 let gridEnabled = params.get("grid") === "1";
-let gridUserOverride = false;
-let centerGuideUserOverride = false;
 let realtimeConnected = false;
 let pollEndpointSupported = null;
 
@@ -127,13 +124,10 @@ async function startOverlayMicrophone() {
     await localMicEngine.start();
     localMicActive = true;
     updateLocalMicState(localMicEngine.state || "idle");
-    updateOverlayControlState();
-    await refreshOverlayMicDevices();
     if (debugMode) setStatus("Overlay microphone active", false, true);
   } catch (error) {
     localMicActive = false;
     localMicEngine = null;
-    updateOverlayControlState();
     console.warn("OBS overlay microphone capture unavailable:", error);
     setStatus("Mic tidak tersedia: " + error.message + ". Tekan Aktifkan Mic dan izinkan akses mikrofon.", true, true);
   }
@@ -179,55 +173,6 @@ function drawCenterGuide(context, width, height) {
   context.font = "800 " + (24 * unit) + "px system-ui"; context.textAlign = "center";
   context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("AVATAR CENTER", 0, bodyH * .72);
   context.restore();
-}
-
-function updateOverlayControlState() {
-  const micButton = document.getElementById("overlayMicToggle");
-  const gridButton = document.getElementById("overlayGridToggle");
-  const centerButton = document.getElementById("overlayCenterToggle");
-  const panel = document.getElementById("overlayControls");
-  const showButton = document.getElementById("overlayControlsShow");
-  if (micButton) { micButton.textContent = localMicActive ? "Mic ON · Matikan" : "Aktifkan Mic"; micButton.setAttribute("aria-pressed", String(localMicActive)); }
-  if (gridButton) gridButton.setAttribute("aria-pressed", String(gridEnabled));
-  if (centerButton) centerButton.setAttribute("aria-pressed", String(centerGuideEnabled));
-  panel?.classList.toggle("is-visible", controlsVisible);
-  showButton?.classList.toggle("is-visible", !controlsVisible && params.get("controls") === "1");
-}
-
-async function refreshOverlayMicDevices() {
-  const select = document.getElementById("overlayMicDevice");
-  if (!select || !navigator.mediaDevices?.enumerateDevices) return;
-  try {
-    const selected = localMicEngine?.options?.deviceId || select.value;
-    const devices = (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === "audioinput");
-    select.replaceChildren(new Option("System default mic", ""));
-    devices.forEach((device, index) => select.add(new Option(device.label || ("Microphone " + (index + 1)), device.deviceId)));
-    select.value = devices.some(device => device.deviceId === selected) ? selected : "";
-  } catch (error) { console.warn("Microphone list unavailable:", error); }
-}
-
-function bindOverlayControls() {
-  document.getElementById("overlayMicToggle")?.addEventListener("click", async () => {
-    const button = document.getElementById("overlayMicToggle"); button.disabled = true;
-    try {
-      if (localMicActive && localMicEngine) {
-        await localMicEngine.stop(); localMicEngine = null; localMicActive = false; updateLocalMicState("idle");
-      } else await startOverlayMicrophone();
-    } finally { button.disabled = false; updateOverlayControlState(); }
-  });
-  document.getElementById("overlayMicDevice")?.addEventListener("change", async event => {
-    if (!localMicActive) return;
-    const deviceId = event.target.value;
-    await localMicEngine?.stop(); localMicEngine = null; localMicActive = false;
-    const host = members.find(member => member.user_id === localMicUserId);
-    if (host) host.preferences = { ...(host.preferences || {}), deviceId };
-    await startOverlayMicrophone();
-  });
-  document.getElementById("overlayGridToggle")?.addEventListener("click", () => { gridUserOverride = true; gridEnabled = !gridEnabled; updateOverlayControlState(); render(); });
-  document.getElementById("overlayCenterToggle")?.addEventListener("click", () => { centerGuideUserOverride = true; centerGuideEnabled = !centerGuideEnabled; updateOverlayControlState(); render(); });
-  document.getElementById("overlayControlsHide")?.addEventListener("click", () => { controlsVisible = false; updateOverlayControlState(); });
-  document.getElementById("overlayControlsShow")?.addEventListener("click", () => { controlsVisible = true; updateOverlayControlState(); });
-  updateOverlayControlState();
 }
 
 function drawCompositeFrame(now) {
@@ -364,8 +309,8 @@ async function refreshMembers() {
     setStatus("Overlay terhubung ke server, tetapi daftar peserta room kosong. Pastikan room masih aktif dan akun pembuat link masih menjadi anggota.", true);
     return;
   }
-  if (!gridUserOverride) gridEnabled = members.some(member => member.overrides?.showGrid === true) || params.get("grid") === "1";
-  if (!centerGuideUserOverride) centerGuideEnabled = members.some(member => member.overrides?.showCenterGuide === true) || params.get("centerGuide") === "1";
+  gridEnabled = members.some(member => member.overrides?.showGrid === true) || params.get("grid") === "1";
+  centerGuideEnabled = members.some(member => member.overrides?.showCenterGuide === true) || params.get("centerGuide") === "1";
   updateOverlayControlState();
   const hasAvatarAssets = members.some(member => Object.values(member.assets || {}).some(Boolean));
   if (!hasAvatarAssets) {
