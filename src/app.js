@@ -83,7 +83,12 @@ function renderNavigation() {
     button.addEventListener("click", () => selectMenu(item.id));
     nav.append(button);
   }
-  $("logoutButton").hidden = !currentUser;
+  const logoutButton = $("logoutButton");
+  logoutButton.hidden = !currentUser;
+  const mobileNavigation = window.matchMedia("(max-width: 900px)").matches;
+  const sidebarBottom = $("sidebar").querySelector(".sidebar-bottom");
+  if (mobileNavigation) nav.append(logoutButton);
+  else sidebarBottom.append(logoutButton);
   $("accountName").textContent = currentUser?.username || "Not signed in";
   $("accountRole").textContent = currentUser?.role || "Guest";
   $("accountInitial").textContent = (currentUser?.username || "?").slice(0, 1).toUpperCase();
