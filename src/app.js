@@ -1,5 +1,5 @@
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
-import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-accessory-editor-1";
+import { AvatarRenderer, resolveRoomAvatarPreferences, sortRoomMembers } from "./avatar-renderer.js?v=20261121-collab-room-composite-1";
 
 const $ = (id) => document.getElementById(id);
 const viewIds = ["loginGate", "editorView", "collaborationView", "adminView", "overlayView"];
@@ -53,6 +53,8 @@ const remotePlayerSequences = new Map();
 const remoteLayoutSequences = new Map();
 const roomPreviewImages = new Map();
 const roomPreviewRenderers = new Map();
+let roomBackgroundRenderer = null;
+let roomBackgroundProfileKey = "";
 
 function showMessage(target, message, type = "info") {
   const el = $(target);
@@ -2046,7 +2048,7 @@ async function broadcastMemberAssetsUpdated() {
 async function loadRoomMembers() {
   try {
     const result = await api("room_members", { room_id: currentRoom.id });
-    roomMembers = result.members || [];
+    roomMembers = sortRoomMembers(result.members || []);
     const ownMember = roomMembers.find(member => member.user_id === currentUser.id);
     // Room controls are a room-scoped layer over the saved profile defaults.
     // Always rebuild this state: retaining the previous room's local overrides
@@ -2135,6 +2137,15 @@ function renderRoomParticipants() {
     notice.classList.remove("is-error");
   }
 
+  const hostMember = visible.find(member => member.is_host);
+  const hostBackground = hostMember?.preferences?.background || { mode: "transparent" };
+  const hostBackgroundKey = JSON.stringify(hostBackground);
+  if (!roomBackgroundRenderer) roomBackgroundRenderer = new AvatarRenderer(document.createElement("canvas"));
+  if (roomBackgroundProfileKey !== hostBackgroundKey) {
+    roomBackgroundRenderer.setPreferences({ background: hostBackground });
+    roomBackgroundProfileKey = hostBackgroundKey;
+  }
+
   const visibleIds = new Set(visible.map(member => member.user_id));
   for (const [userId, entry] of roomPreviewRenderers) {
     if (!visibleIds.has(userId)) {
@@ -2156,18 +2167,17 @@ function renderRoomParticipants() {
       entry.canvas.width = playerWidth;
       entry.canvas.height = playerHeight;
     }
-    const overrides = member.user_id === currentUser.id
-      ? { ...(member.overrides || {}), ...roomOverrides }
-      : (member.overrides || {});
+    const overrides = member.overrides || {};
     const profile = member.preferences || {};
-    const preferences = resolveRoomAvatarPreferences(profile, overrides, playerWidth, playerHeight, index, visible.length);
-    const profileKey = JSON.stringify(profile);
+    const spriteProfile = { ...profile, background: { mode: "transparent" } };
+    const preferences = resolveRoomAvatarPreferences(spriteProfile, overrides, playerWidth, playerHeight, index, visible.length);
+    const profileKey = JSON.stringify(spriteProfile);
     const assets = member.assets || {};
     const assetsKey = JSON.stringify(assets);
     const accessories = member.accessories || [];
     const accessoriesKey = JSON.stringify(accessories);
     if (entry.profileKey !== profileKey) {
-      entry.renderer.setPreferences(profile);
+      entry.renderer.setPreferences(spriteProfile);
       entry.profileKey = profileKey;
     }
     if (entry.assetsKey !== assetsKey) {
@@ -2241,7 +2251,8 @@ function drawRoomStageFrame(now = performance.now()) {
     const canvas = $("roomStage");
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const visible = roomMembers.slice(0, 4);
+    roomBackgroundRenderer?.drawBackgroundTo(ctx, canvas.width, canvas.height);
+    const visible = sortRoomMembers(roomMembers).slice(0, 4);
     const showGrid = visible.some(member => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
     const showCenter = visible.some(member => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
     visible.forEach(member => {
