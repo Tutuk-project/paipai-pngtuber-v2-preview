@@ -161,12 +161,23 @@ function drawCenterGuide(context, width, height) {
   const cx = width / 2, cy = height / 2, unit = Math.min(width, height) / 1080;
   const headR = 72 * unit, bodyW = 170 * unit, bodyH = 220 * unit;
   context.save(); context.translate(cx, cy);
-  context.globalAlpha = 0.78; context.strokeStyle = "rgba(255,220,170,.98)"; context.fillStyle = "rgba(255,220,170,.28)"; context.lineWidth = Math.max(7, 7 * unit);
-  context.setLineDash([14 * unit, 10 * unit]); context.beginPath(); context.moveTo(-width * .16, 0); context.lineTo(width * .16, 0); context.moveTo(0, -height * .30); context.lineTo(0, height * .30); context.stroke(); context.setLineDash([]);
+  context.globalAlpha = 0.78;
+  context.strokeStyle = "rgba(255,220,170,.98)";
+  context.fillStyle = "rgba(255,220,170,.28)";
+  context.lineWidth = Math.max(7, 7 * unit);
+  context.setLineDash([14 * unit, 10 * unit]);
+  context.beginPath(); context.moveTo(-width * .16, 0); context.lineTo(width * .16, 0);
+  context.moveTo(0, -height * .30); context.lineTo(0, height * .30); context.stroke(); context.setLineDash([]);
   context.beginPath(); context.arc(0, -bodyH * .72, headR, 0, Math.PI * 2); context.fill(); context.stroke();
-  context.beginPath(); context.arc(0, -bodyH * .80, headR * 1.08, Math.PI * 1.08, Math.PI * 1.92); context.stroke();\n  context.beginPath(); context.arc(-headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); context.arc(headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); context.stroke();\n  context.beginPath(); context.roundRect(-bodyW / 2, -bodyH * .42, bodyW, bodyH * .92, 42 * unit); context.fill(); context.stroke();
-  context.beginPath(); context.moveTo(-bodyW / 2, -bodyH * .30); context.lineTo(-bodyW * .95, bodyH * .05); context.lineTo(-bodyW * .62, bodyH * .34); context.moveTo(bodyW / 2, -bodyH * .30); context.lineTo(bodyW * .95, bodyH * .05); context.lineTo(bodyW * .62, bodyH * .34); context.stroke();
-  context.font = "700 " + (22 * unit) + "px system-ui"; context.textAlign = "center"; context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("AVATAR CENTER", 0, bodyH * .72);
+  context.beginPath(); context.arc(0, -bodyH * .80, headR * 1.08, Math.PI * 1.08, Math.PI * 1.92); context.stroke();
+  context.beginPath(); context.arc(-headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2);
+  context.arc(headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); context.stroke();
+  context.beginPath(); context.roundRect(-bodyW / 2, -bodyH * .42, bodyW, bodyH * .92, 42 * unit); context.fill(); context.stroke();
+  context.beginPath(); context.moveTo(-bodyW / 2, -bodyH * .25); context.lineTo(-bodyW * .92, bodyH * .02);
+  context.lineTo(-bodyW * .72, bodyH * .36); context.moveTo(bodyW / 2, -bodyH * .25);
+  context.lineTo(bodyW * .92, bodyH * .02); context.lineTo(bodyW * .72, bodyH * .36); context.stroke();
+  context.font = "800 " + (24 * unit) + "px system-ui"; context.textAlign = "center";
+  context.fillStyle = "rgba(255,235,200,.98)"; context.fillText("AVATAR CENTER", 0, bodyH * .72);
   context.restore();
 }
 
