@@ -309,8 +309,11 @@ async function refreshMembers() {
     setStatus("Overlay terhubung ke server, tetapi daftar peserta room kosong. Pastikan room masih aktif dan akun pembuat link masih menjadi anggota.", true);
     return;
   }
-  gridEnabled = members.some(member => member.overrides?.showGrid === true) || params.get("grid") === "1";
-  centerGuideEnabled = members.some(member => member.overrides?.showCenterGuide === true) || params.get("centerGuide") === "1";
+  // Keep URL flags as explicit link-level overrides only. Room toggles are
+  // evaluated from the latest member.overrides on every composite frame so an
+  // ON → OFF change immediately restores transparency.
+  gridEnabled = params.get("grid") === "1";
+  centerGuideEnabled = params.get("centerGuide") === "1";
   
   const hasAvatarAssets = members.some(member => Object.values(member.assets || {}).some(Boolean));
   if (!hasAvatarAssets) {
