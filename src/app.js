@@ -148,15 +148,6 @@ function focusSettingsSection(sectionId) {
 
 function selectMobileDock(target) {
   switch (target) {
-    case "settings": {
-      closeMobileMenu();
-      showView("editorView");
-      const pageTitle = $("pageTitle");
-      if (pageTitle) pageTitle.textContent = "Settings";
-      updateMobileDock("settings");
-      document.querySelector(".preview-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      break;
-    }
     case "audio": selectMenu("audio"); break;
     case "effects": selectMenu("effects"); break;
     case "avatar": selectMenu("avatar"); break;
@@ -596,7 +587,6 @@ function renderAvatarWorkspace(content) {
   main.body.append(scaleField, motion, resolutionTitle, resolution, save);
 
   content.append(characterGroup.details, main.details);
-  renderAvatarBackgroundWorkspace(content);
 }
 
 
@@ -875,6 +865,7 @@ function renderVisualEffectWorkspace(content) {
   }, true);
   makeup.body.append(global, accessorySwitch, buttonGrid, parameterPanel, save);
   content.append(makeup.details);
+  renderAvatarBackgroundWorkspace(content);
 }
 
 function renderAboutWorkspace(content) {
@@ -1801,7 +1792,10 @@ function renderRoomControls(options = {}) {
       if (ownMember) ownMember.overrides = { ...(ownMember.overrides || {}), [item.key]: value };
       output.textContent = item.format(value);
       if (item.key === "sensitivity" || item.key === "boostDb") audio?.setOptions({ [item.key]: value });
-      if (["scale", "x", "y"].includes(item.key)) renderRoomParticipants();
+      if (["scale", "x", "y"].includes(item.key)) {
+        renderRoomParticipants();
+        schedulePlayerLayoutBroadcast();
+      }
     });
     range.addEventListener("change", async () => {
       const value = Number(range.value);
@@ -1903,6 +1897,15 @@ async function broadcastPlayerLayout() {
   if (!roomChannel || !currentRoom) return;
   const { scale, x, y, showGrid, showCenterGuide } = roomOverrides;
   await roomChannel.send({ type: "broadcast", event: "player-layout", payload: { user_id: currentUser.id, seq: ++layoutSequence, overrides: { scale, x, y, showGrid, showCenterGuide }, at: Date.now() } });
+}
+
+let layoutBroadcastTimer = 0;
+function schedulePlayerLayoutBroadcast() {
+  if (!roomChannel || !currentRoom || layoutBroadcastTimer) return;
+  layoutBroadcastTimer = window.setTimeout(() => {
+    layoutBroadcastTimer = 0;
+    broadcastPlayerLayout().catch(error => console.warn("Live layout broadcast failed:", error));
+  }, 70);
 }
 
 async function broadcastMemberAssetsUpdated() {
@@ -2128,6 +2131,7 @@ async function leaveRoom(restoreView = true) {
   }
   if (renderFrame) cancelAnimationFrame(renderFrame);
   renderFrame = 0;
+  if (layoutBroadcastTimer) { clearTimeout(layoutBroadcastTimer); layoutBroadcastTimer = 0; }
   for (const entry of roomPreviewRenderers.values()) entry.renderer.stop();
   roomPreviewRenderers.clear();
   currentRoom = null; roomMembers = []; remotePlayerStates.clear(); remotePlayerSequences.clear(); remoteLayoutSequences.clear(); roomPreviewImages.clear();
