@@ -186,14 +186,14 @@ test("room layout sliders update the local member renderer immediately", () => {
   assert.match(stage, /member\.user_id === currentUser\.id[\s\S]*?\.\.\.roomOverrides/);
 });
 
-test("Solo OBS overlay keeps its canvas clean while starting invisible local mic capture", () => {
+test("OBS overlay exposes gesture-based microphone controls while keeping rendering on canvas", () => {
   const overlay = read("src/overlay.js");
   const html = read("overlay.html");
   assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
-  assert.match(overlay, /startInvisibleSoloMicrophone/);
-  assert.match(overlay, /roomPurpose !== "personal_overlay"/);
+  assert.match(overlay, /startOverlayMicrophone/);
+  assert.match(overlay, /bindOverlayControls/);
   assert.match(overlay, /updateLocalMicState/);
-  assert.doesNotMatch(html, /<button\b/i);
+  assert.match(html, /id="overlayMicToggle"/);
   assert.match(html, /<canvas id="stage"/);
 });
 
@@ -211,7 +211,7 @@ test("Solo overlay accepts Creator Talking broadcasts as a fallback even when lo
   const overlay = read("src/overlay.js");
   assert.match(overlay, /localMicActive && payload\.user_id === localMicUserId && payload\.state !== "talking"/);
   assert.match(overlay, /states\.set\(payload\.user_id, payload\.state\)/);
-  assert.match(overlay, /startInvisibleSoloMicrophone/);
+  assert.match(overlay, /startOverlayMicrophone/);
 });
 
 
