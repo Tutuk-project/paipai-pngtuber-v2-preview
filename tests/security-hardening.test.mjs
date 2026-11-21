@@ -141,7 +141,7 @@ test("room snapshots retain signed assets and the shared resolver isolates parti
     const start = edge.indexOf('if (action === "' + action + '")'), next = edge.indexOf('if (action === "', start + 10);
     assert.match(edge.slice(start, next > start ? next : undefined), /preferences: await signBackground\(db,/);
   }
-  assert.match(edge, /function signBackground\(db,[\s\S]*?createSignedUrl\(background\.storage_path, 3600\)/);
+  assert.match(edge, /function signBackground\(db: SupabaseClient,[\s\S]*?createSignedUrl\(background\.storage_path, 3600\)/);
   assert.match(app, /resolveRoomBackgroundPreferences\(roomMembers\)/);
   assert.match(overlay, /resolveRoomBackgroundPreferences\(members\)/);
   assert.match(app, /roomBackgroundRenderer\.setPreferences\(hostBackground\)/);
