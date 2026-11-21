@@ -28,6 +28,64 @@ let centerGuideEnabled = params.get("centerGuide") === "1";
 let gridEnabled = params.get("grid") === "1";
 let realtimeConnected = false;
 let pollEndpointSupported = null;
+const BUILD_ID = "OBS-HUD-2026-11-21-r1";
+let debugHud = null;
+let debugHudTimer = 0;
+let realtimeStatus = "NOT_CONNECTED";
+let realtimeLastError = "";
+let lastBroadcastReceived = null;
+let lastPollResult = null;
+let authSessionStatus = "not checked";
+let authRefreshStatus = "not observed";
+let storageStatus = { localStorage: "unknown", sessionStorage: "unknown" };
+let rafTicks = 0;
+let rafFps = 0;
+let rafLastSampleAt = Date.now();
+let rafLastTickAt = 0;
+const drawnTransforms = new Map();
+
+function debugTime(value) {
+  return value ? new Date(value).toLocaleTimeString() : "—";
+}
+function initializeDebugHud() {
+  if (!debugMode || debugHud) return;
+  try { localStorage.setItem("__vio_debug_probe", "1"); localStorage.removeItem("__vio_debug_probe"); storageStatus.localStorage = "available"; }
+  catch (error) { storageStatus.localStorage = "blocked: " + error.message; }
+  try { sessionStorage.setItem("__vio_debug_probe", "1"); sessionStorage.removeItem("__vio_debug_probe"); storageStatus.sessionStorage = "available"; }
+  catch (error) { storageStatus.sessionStorage = "blocked: " + error.message; }
+  debugHud = document.createElement("pre");
+  debugHud.id = "overlayDebugHud";
+  debugHud.style.cssText = "position:fixed;z-index:9999;left:8px;top:8px;right:8px;max-height:48vh;overflow:auto;margin:0;padding:10px 12px;border:1px solid #6bd6b4;border-radius:10px;background:rgba(5,12,18,.94);color:#d9fff2;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:none";
+  document.body.append(debugHud);
+  debugHudTimer = window.setInterval(renderDebugHud, 500);
+  renderDebugHud();
+}
+function renderDebugHud() {
+  if (!debugHud) return;
+  const membersView = members.map(member => {
+    const id = member.user_id;
+    const drawn = drawnTransforms.get(id);
+    const seq = layoutSequences.get(id) ?? 0;
+    return {
+      member_id: id,
+      snapshot_override: member.overrides || {},
+      updated_at: member.overrides_updated_at || member.updated_at || null,
+      drawn: drawn || "not drawn yet",
+      last_applied_seq: seq
+    };
+  });
+  const pollMembers = lastPollResult?.members || [];
+  debugHud.textContent = [
+    "VIO OBS DEBUG HUD · " + BUILD_ID,
+    "Realtime: " + realtimeStatus + (realtimeLastError ? " · " + realtimeLastError : ""),
+    "Last broadcast: " + (lastBroadcastReceived ? JSON.stringify(lastBroadcastReceived) : "none"),
+    "Last poll: " + (lastPollResult ? JSON.stringify({ at: debugTime(lastPollResult.at), http_status: lastPollResult.httpStatus, error: lastPollResult.error, members: pollMembers }) : "none"),
+    "Members actually drawn / applied seq: " + JSON.stringify(membersView),
+    "rAF: " + rafFps + " ticks/s · alive=" + (Date.now() - rafLastTickAt < 2500),
+    "Storage: " + JSON.stringify(storageStatus),
+    "Auth: session=" + authSessionStatus + " · refresh=" + authRefreshStatus
+  ].join("\n");
+}
 
 function setStatus(message, error = false, forceVisible = true) {
   if (!statusEl) return;
@@ -43,7 +101,24 @@ function clearStatus() {
 }
 
 async function api(action, payload = {}) {
+  const startedAt = Date.now();
   const { data, error } = await supabase.functions.invoke(config.edgeFunctionName || "vio-api", { body: { action, ...payload } });
+  if (action === "overlay_poll" || action === "overlay_connect") {
+    const response = error?.context instanceof Response ? error.context : null;
+    lastPollResult = {
+      at: Date.now(),
+      httpStatus: response?.status || (error ? null : 200),
+      error: error ? (error.message || String(error)) : (data?.ok ? null : data?.error || "Unknown overlay API error"),
+      elapsed_ms: Date.now() - startedAt,
+      members: (data?.members || []).map(item => ({
+        member_id: item.user_id,
+        x: item.overrides?.x, y: item.overrides?.y, scale: item.overrides?.scale,
+        overrides: item.overrides || {},
+        updated_at: item.overrides_updated_at || item.updated_at || null
+      }))
+    };
+    renderDebugHud();
+  }
   if (error) throw new Error(error.message || `Supabase request failed: ${action}`);
   if (!data?.ok) throw new Error(data?.error || `Overlay API failed: ${action}`);
   return data;
@@ -92,6 +167,10 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     entry.accessoriesKey = accessoriesKey;
   }
   renderer.setRoomLayout(preferences);
+  drawnTransforms.set(member.user_id, {
+    x: Number(overrides.x ?? 0), y: Number(overrides.y ?? 0), scale: preferences.scale,
+    offsetX: preferences.offsetX, offsetY: preferences.offsetY
+  });
   renderer.setState(states.get(member.user_id) || member.state || "idle");
   if (!renderer.running) renderer.start();
   return entry;
@@ -181,6 +260,14 @@ function drawCenterGuide(context, width, height) {
 
 function drawCompositeFrame(now) {
   if (!canvas || !ctx) return;
+  rafTicks++;
+  rafLastTickAt = Date.now();
+  if (Date.now() - rafLastSampleAt >= 1000) {
+    rafFps = rafTicks;
+    rafTicks = 0;
+    rafLastSampleAt = Date.now();
+    renderDebugHud();
+  }
   if (now - lastCompositeFrame >= 1000 / 30) {
     lastCompositeFrame = now;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -334,12 +421,23 @@ async function boot() {
       auth: { persistSession: true, autoRefreshToken: true }
     });
     let { data: { session } } = await supabase.auth.getSession();
+    authSessionStatus = session ? "existing session" : "no session";
     if (!session) {
       const { data, error } = await supabase.auth.signInAnonymously();
       if (error) throw new Error(`Login perangkat overlay gagal: ${error.message}`);
       session = data.session;
+      authSessionStatus = session ? "anonymous session created" : "anonymous session missing";
     }
     if (!session) throw new Error("Sesi perangkat overlay tidak berhasil dibuat.");
+    authSessionStatus += session.expires_at ? " · expires " + debugTime(session.expires_at * 1000) : "";
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "TOKEN_REFRESHED") authRefreshStatus = "success · " + debugTime(Date.now());
+      else if (event === "SIGNED_OUT") authRefreshStatus = "signed out";
+      else if (event === "SIGNED_IN" && !authRefreshStatus.includes("success")) authRefreshStatus = "signed in";
+      if (nextSession?.expires_at) authSessionStatus = "session · expires " + debugTime(nextSession.expires_at * 1000);
+      renderDebugHud();
+    });
+    initializeDebugHud();
 
     setStatus("Memuat peserta dan aset avatar…");
     await refreshMembers();
@@ -363,11 +461,22 @@ async function boot() {
       .on("broadcast", { event: "player-layout" }, ({ payload }) => {
         if (!payload?.user_id || !payload.overrides) return;
         const seq = Number(payload.seq) || 0;
-        if (seq && seq <= (layoutSequences.get(payload.user_id) || 0)) return;
-        if (seq) layoutSequences.set(payload.user_id, seq);
+        const previousSeq = layoutSequences.get(payload.user_id) || 0;
         const member = members.find(item => item.user_id === payload.user_id);
-        if (member) member.overrides = { ...(member.overrides || {}), ...payload.overrides };
-        render();
+        const stale = !!(seq && seq <= previousSeq);
+        lastBroadcastReceived = {
+          at: Date.now(), member_id: payload.user_id, seq,
+          x: payload.overrides.x, y: payload.overrides.y, scale: payload.overrides.scale,
+          applied: !!member && !stale,
+          reason: !member ? "member_id_not_found" : stale ? "stale_seq" : "applied"
+        };
+        if (stale) { renderDebugHud(); return; }
+        if (seq) layoutSequences.set(payload.user_id, seq);
+        if (member) {
+          member.overrides = { ...(member.overrides || {}), ...payload.overrides };
+          render();
+        }
+        renderDebugHud();
       })
       .on("broadcast", { event: "member-assets-updated" }, () => {
         refreshMembers().catch(error => setStatus(`Gagal memperbarui aset: ${error.message}`, true));
@@ -381,7 +490,12 @@ async function boot() {
         let settled = false;
         const finish = () => { if (!settled) { settled = true; resolve(); } };
         const timeout = setTimeout(finish, 6500);
-        channel.subscribe(status => {
+        channel.subscribe((status, error) => {
+          realtimeStatus = status;
+          if (error) realtimeLastError = error.message || String(error);
+          else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") realtimeLastError = "status=" + status;
+          else if (status === "SUBSCRIBED") realtimeLastError = "";
+          renderDebugHud();
           if (status === "SUBSCRIBED") { realtimeConnected = true; clearTimeout(timeout); finish(); }
           else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") { realtimeConnected = false; clearTimeout(timeout); finish(); }
         });
@@ -423,6 +537,7 @@ boot();
 window.addEventListener("pagehide", () => {
   if (refreshTimer) clearInterval(refreshTimer);
   if (assetRefreshTimer) clearInterval(assetRefreshTimer);
+  if (debugHudTimer) clearInterval(debugHudTimer);
   if (compositeRaf) cancelAnimationFrame(compositeRaf);
   compositeRaf = 0;
   for (const entry of playerRenderers.values()) entry.renderer.stop();
