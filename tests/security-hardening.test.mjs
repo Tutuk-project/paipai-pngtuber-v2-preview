@@ -314,9 +314,9 @@ test("clean OBS link stays menu-free while a separate control-enabled link is av
   const generatorStart = app.indexOf("async function generateOverlayLink(");
   const generatorEnd = app.indexOf("async function loadAdminOverview", generatorStart);
   const generator = app.slice(generatorStart, generatorEnd);
-  assert.match(generator, /room\\.purpose === "collaboration"\\) url\\.searchParams\\.set\\("controls", "1"\\)/);
+  assert.ok(generator.includes('if (room.purpose === "collaboration") url.searchParams.set("controls", "1");'));
   assert.match(html, /id="copyOverlayControlsLink"/);
-  assert.match(generator, /room\\.purpose !== "collaboration"/);
+  assert.ok(generator.includes('$("copyOverlayControlsLink").hidden = room.purpose !== "collaboration";'));
 });
 
 
