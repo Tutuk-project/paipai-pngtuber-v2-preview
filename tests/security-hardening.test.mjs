@@ -350,7 +350,7 @@ test("editor view is revealed before optional navigation and settings rendering"
   const selectEnd = app.indexOf("function settingField(", selectStart);
   const select = app.slice(selectStart, selectEnd);
   const showEditor = select.indexOf('showView("editorView")');
-  const renderNavigation = select.indexOf("renderNavigation()");
+  const renderNavigation = select.indexOf("renderNavigation()", showEditor);
   assert.ok(showEditor >= 0, "selectMenu must reveal the editor view");
   assert.ok(renderNavigation > showEditor, "the editor must be visible before navigation is rendered");
 
@@ -370,5 +370,5 @@ test("view switching tolerates missing optional DOM elements", () => {
   const showViewEnd = app.indexOf("function allowedMenus(", showViewStart);
   const showView = app.slice(showViewStart, showViewEnd);
   assert.match(showView, /const view = \$\(viewId\);[\s\S]*if \(view\) view\.hidden/);
-  assert.match(showView, /if \(roomButton\) roomButton\.hidden/);
-};
+  assert.match(showView, /if \\(roomButton\\) roomButton\\.hidden/);
+});
