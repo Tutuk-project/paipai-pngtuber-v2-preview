@@ -2070,6 +2070,7 @@ async function generateOverlayLink(button = null) {
     if (!result?.room_id || !result?.overlay_token || String(result.overlay_token).length < 20) throw new Error("Server tidak mengembalikan kredensial overlay yang valid.");
     const url = new URL("../overlay.html", import.meta.url);
     url.hash = new URLSearchParams({ room: result.room_id, token: result.overlay_token }).toString();
+    url.searchParams.set("controls", "1");
     generatedOverlayUrl = url.toString();
     $("overlayLinkUrl").value = generatedOverlayUrl;
     syncOverlayGeneratorButtons("Salin Link", false, "copy");
