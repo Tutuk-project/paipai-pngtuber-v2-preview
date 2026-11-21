@@ -105,12 +105,16 @@ test("accessory upload reloads active character assets and refreshes the room sn
   assert.ok(upload.includes("await broadcastMemberAssetsUpdated()"));
 });
 
-test("modular avatar renderer is wired into editor and OBS overlay", () => {
-  const app = read("src/app.js");
-  const overlay = read("src/overlay.js");
-  const renderer = read("src/avatar-renderer.js");
-  assert.match(app, /import \{ AvatarRenderer, resolveRoomAvatarPreferences \} from "\.\/avatar-renderer\.js(?:\?v=[^"]+)?"/);
-  assert.match(overlay, /import \{ AvatarRenderer, resolveRoomAvatarPreferences \} from "\.\/avatar-renderer\.js(?:\?v=[^"]+)?"/);
+test("modular avatar renderer is wired into editor and OBS overlay with one module identity per page", () => {
+  const app = read("src/app.js"), overlay = read("src/overlay.js"), renderer = read("src/avatar-renderer.js");
+  const versionsForPage = source => [...source.matchAll(/(?:from\s*|import\s*)["']([^"']*avatar-renderer\.js(?:\?[^"']*)?)["']/g)]
+    .map(match => new URL(match[1], "https://vio.invalid/").searchParams.get("v"));
+  for (const [page, source] of [["Creator", app], ["OBS overlay", overlay]]) {
+    const versions = versionsForPage(source);
+    assert.ok(versions.length > 0, page + " must import avatar-renderer.js");
+    assert.ok(versions.every(Boolean), page + " imports must include a cache version");
+    assert.equal(new Set(versions).size, 1, page + " must use one renderer module instance");
+  }
   for (const feature of ["drawBackground", "drawAvatar", "drawAccessories", "blinkDelay"]) assert.ok(renderer.includes(feature));
   for (const feature of ["glow", "shadow", "stroke", "filter", "distort"]) assert.ok(renderer.includes(feature));
 });
@@ -327,30 +331,38 @@ test("Solo output resolution remains profile-driven while Collaboration uses a l
   assert.ok(obs.includes('id="stage" width="1080" height="1920"'));
 });
 
-test("private background media upload is owner-scoped and signed for editor, collaboration and OBS", () => {
-  const app = read("src/app.js");
-  const overlay = read("src/overlay.js");
-  const renderer = read("src/avatar-renderer.js");
-  const edge = read("supabase/functions/vio-api/index.ts");
-  const migration = read("supabase/migrations/004_vio_background_media.sql");
+test("private background media uses server-signed URLs and only the host background enters Collaboration", async () => {
+  const { resolveRoomBackgroundPreferences, resolveRoomAvatarLayouts } = await import("../src/avatar-renderer.js");
+  const app = read("src/app.js"), overlay = read("src/overlay.js"), renderer = read("src/avatar-renderer.js");
+  const edge = read("supabase/functions/vio-api/index.ts"), migration = read("supabase/migrations/004_vio_background_media.sql");
   assert.ok(app.includes('option value="image">Image / GIF'));
   assert.ok(app.includes('option value="video">Video'));
   assert.ok(app.includes('from("vio-backgrounds").upload'));
   assert.ok(app.includes('api("record_background_asset"'));
   assert.ok(edge.includes('action === "record_background_asset"'));
   assert.ok(edge.includes('storage.from("vio-backgrounds").list'));
-  assert.ok(edge.includes("signBackground(db"));
-  assert.ok(edge.includes("profile: profile ? { ...profile, preferences: await signBackground(db, profile.preferences || {}) }"));
-  assert.ok(edge.includes("preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {})"));
+  assert.match(edge, /function signBackground\(db,[\s\S]*?createSignedUrl\(background\.storage_path, 3600\)/);
+  for (const action of ["room_members", "overlay_connect"]) {
+    const start = edge.indexOf('if (action === "' + action + '")'), next = edge.indexOf('if (action === "', start + 10);
+    assert.match(edge.slice(start, next > start ? next : undefined), /preferences: await signBackground\(db,/);
+  }
   assert.ok(migration.includes("'image/jpeg'"));
   assert.ok(migration.includes("52428800"));
   assert.ok(migration.includes("'vio-backgrounds'"));
   assert.ok(migration.includes("public = false"));
-  assert.ok(renderer.includes("setBackgroundVideo(src)"));
-  assert.ok(renderer.includes('this.setBackgroundVideo(background.src || null)'));
-  assert.ok(renderer.includes('this.setBackgroundImage(background.mode === "image" ? background.src || null : null)'));
-  assert.ok(overlay.includes("renderer.setPreferences(profile)"));
-  assert.ok(app.includes("entry.renderer.setPreferences(profile)"));
+  const members = [
+    { user_id: "joiner", preferences: { background: { mode: "image", src: "joiner-private" } } },
+    { user_id: "host", is_host: true, preferences: { background: { mode: "image", src: "host-signed-url", storage_path: "host/bg.png", bucket_id: "vio-backgrounds" } } }
+  ];
+  assert.deepEqual(resolveRoomBackgroundPreferences(members), { background: members[1].preferences.background });
+  assert.ok(resolveRoomAvatarLayouts(members).every(item => item.spriteProfile.background.mode === "transparent"));
+  assert.match(app, /resolveRoomBackgroundPreferences\(roomMembers\)/);
+  assert.match(overlay, /resolveRoomBackgroundPreferences\(members\)/);
+  assert.match(app, /roomBackgroundRenderer\.setPreferences\(hostBackground\)/);
+  assert.match(overlay, /roomBackgroundRenderer\.setPreferences\(hostBackground\)/);
+  assert.match(renderer, /setBackgroundVideo\(src\)/);
+  assert.match(renderer, /this\.setBackgroundVideo\(background\.src \|\| null\)/);
+  assert.match(renderer, /this\.setBackgroundImage\(background\.mode === "image" \? background\.src \|\| null : null\)/);
 });
 
 test("all v2 accessory, background and cleanup dependencies have ordered migrations", () => {
