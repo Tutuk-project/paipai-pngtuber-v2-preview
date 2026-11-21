@@ -2270,6 +2270,14 @@ function setupEvents() {
   $("copyRoomCode").addEventListener("click", async () => { if (currentRoom) { try { await copyText(currentRoom.room_code); showToast("Kode room disalin"); } catch (error) { showToast(error.message, "error"); } } });
   $("closeOverlayLink").addEventListener("click", () => $("overlayLinkDialog").close());
   $("copyOverlayLink").addEventListener("click", async () => { try { await copyText(generatedOverlayUrl); showToast("Link OBS disalin"); } catch (error) { showToast(error.message, "error"); } });
+  $("copyOverlayControlsLink").addEventListener("click", async () => {
+    try {
+      const controlsUrl = new URL(generatedOverlayUrl);
+      controlsUrl.searchParams.set("controls", "1");
+      await copyText(controlsUrl.toString());
+      showToast("Link OBS dengan kontrol mic dan guide disalin");
+    } catch (error) { showToast(error.message, "error"); }
+  });
   $("openOverlayPreview").addEventListener("click", () => { if (generatedOverlayUrl) window.open(generatedOverlayUrl, "_blank", "noopener,noreferrer"); });
   $("avatarScaleDecrease").addEventListener("click", () => changeAvatarScale(-5));
   $("avatarScaleIncrease").addEventListener("click", () => changeAvatarScale(5));
