@@ -500,3 +500,18 @@ test("Collaboration layout changes broadcast while dragging and OBS excludes edi
   assert.ok(!composite.includes("drawCenterGuide"));
   assert.ok(!composite.includes("drawCompositionGrid"));
 });
+
+
+test("accessory editor has declared pointer state, independent transform controls and drag hit-testing", () => {
+  const app = read("src/app.js");
+  const renderer = read("src/avatar-renderer.js");
+  const edge = read("supabase/functions/vio-api/index.ts");
+  assert.match(app, /let accessoryDragState = null/);
+  assert.match(app, /id = "accessorySelect"/);
+  for (const key of ['"scale"', '"rotation"', '"x"', '"y"']) assert.ok(app.includes(key));
+  assert.match(app, /bounds\.halfWidth/);
+  assert.match(app, /bounds\.halfHeight/);
+  assert.match(renderer, /accessoryRotation \* Math\.PI \/ 180/);
+  assert.match(edge, /"w", "h", "rotation"/);
+  assert.match(edge, /rotation: item\.rotation \|\| 0/);
+});
