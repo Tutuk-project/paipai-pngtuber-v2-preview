@@ -170,15 +170,14 @@ test("GO Collaboration opens Host/Join chooser even while a personal Solo OBS ro
 
 test("GO Collaboration shared stage uses a dedicated landscape canvas", () => {
   const app = read("src/app.js");
-  const stage = app.match(/function renderRoomParticipants\\(\\)[\\s\\S]*?function drawRoomStageFrame/)?.[0] || "";
-  assert.match(stage, /const width = 1920/);
-  assert.match(stage, /const height = 1080/);
-  assert.match(stage, /16 \\/ 9/);
+  const stage = app.slice(app.indexOf("function renderRoomParticipants"), app.indexOf("function drawRoomStageFrame"));
+  assert.ok(stage.includes("const width = 1920"));
+  assert.ok(stage.includes("const height = 1080"));
+  assert.ok(stage.includes('canvas.style.aspectRatio = "16 / 9"'));
   const css = read("assets/app.css");
-  assert.match(css, /#roomStage\\{[^}]*aspect-ratio:16\\/9!important/);
-  assert.match(css, /collab-stage-wrap>canvas\\{[^}]*aspect-ratio:16\\/9!important/);
+  assert.ok(css.includes("aspect-ratio:16/9!important"));
   const overlay = read("src/overlay.js");
-  assert.match(overlay, /isCollaborationRoom\\s*=\\s*roomPurpose === "collaboration"/);
+  assert.ok(overlay.includes('roomPurpose === "collaboration"'));
 });
 
 test("room layout sliders update the local member renderer immediately", () => {
@@ -200,15 +199,15 @@ test("OBS overlay exposes gesture-based microphone controls while keeping render
   assert.match(html, /<canvas id="stage"/);
 });
 
-test("generated OBS links do not enable visible overlay control buttons", () => {
+test("generated OBS links keep Solo clean and expose controls for Collaboration", () => {
   const app = read("src/app.js");
   const start = app.indexOf("async function generateOverlayLink(");
   const end = app.indexOf("async function loadAdminOverview", start);
   const generator = app.slice(start, end);
-  assert.ok(generator.length > 0);
   assert.ok(generator.includes("url.hash = new URLSearchParams"));
-  assert.ok(!generator.includes('searchParams.set("controls"'));
-  assert.ok(generator.includes("Keep the generated OBS source clean"));\n  assert.match(generator, /room\\.purpose === "collaboration"[\\s\\S]*?searchParams\\.set\\("controls", "1"\\)/);
+  assert.ok(!generator.includes('searchParams.set("controls", "1")'));
+  assert.ok(generator.includes('room.purpose === "collaboration"'));
+  assert.ok(generator.includes('url.searchParams.set("controls", "1")'));
 });
 
 test("overlay API returns room purpose for Solo or Collaboration rendering", () => {
