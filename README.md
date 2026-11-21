@@ -133,3 +133,7 @@ A modular `src/avatar-renderer.js` is wired into the v2 editor and OBS overlay. 
 
 ## Latest development checkpoint
 - [Checkpoint 49 — Realtime fallback, mic controls, landscape Collaboration, and center guide](docs/CHECKPOINT-49-2026-11-21.md)
+
+
+## Latest UI checkpoint
+- [Mobile bottom navigation UI checkpoint](docs/UI-CHECKPOINT-MOBILE-BOTTOM-NAV-2026-11-21.md)
