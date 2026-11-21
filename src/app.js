@@ -1,5 +1,5 @@
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
-import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-collab-position-fix-1";
+import { AvatarRenderer, resolveRoomAvatarPreferences } from "./avatar-renderer.js?v=20261121-accessory-editor-1";
 
 const $ = (id) => document.getElementById(id);
 const viewIds = ["loginGate", "editorView", "collaborationView", "adminView", "overlayView"];
@@ -27,6 +27,8 @@ let currentMicState = "idle";
 let assetUrls = { idle: null, talking: null, blink: null, talking_blink: null };
 let characterAccessories = [];
 let selectedAccessoryId = null;
+let accessoryDragState = null;
+const accessorySaveTimers = new Map();
 let characterLibrary = [];
 let activeCharacterId = null;
 let activeMakeupEffect = null;
@@ -1334,76 +1336,135 @@ function renderAccessorySettingsList() {
   if (!host) return;
   host.replaceChildren();
   if (!characterAccessories.length) {
+    selectedAccessoryId = null;
     const empty = document.createElement("p");
     empty.className = "muted accessory-empty";
     empty.textContent = "Belum ada aksesori.";
     host.append(empty);
     return;
   }
+  if (!characterAccessories.some(item => item.id === selectedAccessoryId)) selectedAccessoryId = characterAccessories[0].id;
+  const selected = characterAccessories.find(item => item.id === selectedAccessoryId) || characterAccessories[0];
+  const selector = document.createElement("div");
+  selector.className = "setting-field accessory-selector";
+  const label = document.createElement("label");
+  label.htmlFor = "accessorySelect";
+  label.textContent = "Pilih aksesori";
+  const select = document.createElement("select");
+  select.id = "accessorySelect";
+  select.className = "select-input";
   characterAccessories.forEach((item, index) => {
-    const card = document.createElement("article");
-    card.className = `accessory-library-card ${selectedAccessoryId === item.id ? "is-selected" : ""}`;
-    card.dataset.accessoryId = item.id;
-    const image = document.createElement("img");
-    image.src = item.src;
-    image.alt = item.name || `Aksesori ${index + 1}`;
-    const meta = document.createElement("div");
-    meta.className = "accessory-library-meta";
-    const name = document.createElement("strong");
-    name.textContent = item.name || `Aksesori ${index + 1}`;
-    const hint = document.createElement("small");
-    hint.textContent = "Geser langsung di jendela preview";
-    meta.append(name, hint);
-    const remove = document.createElement("button");
-    remove.type = "button"; remove.className = "icon-button delete-icon-button";
-    remove.textContent = "🗑"; remove.title = "Hapus aksesori";
-    remove.addEventListener("click", async event => {
-      event.stopPropagation(); remove.disabled = true;
-      try {
-        const deletion = await api("delete_accessory", { accessory_id: item.id });
-        characterAccessories = characterAccessories.filter(entry => entry.id !== item.id);
-        if (selectedAccessoryId === item.id) selectedAccessoryId = null;
-        drawPreview(); renderAccessorySettingsList(); renderAccessoryQuickScales();
-        if (deletion.cleanup_pending) showAppToast("File aksesori masih menunggu penghapusan Storage.", "error");
-        if (currentRoom) await loadRoomMembers();
-        await broadcastMemberAssetsUpdated();
-      } catch (error) {
-        remove.disabled = false;
-        showAppToast(`Gagal menghapus aksesori: ${error.message}`, "error");
-      }
-    });
-    card.addEventListener("click", () => { selectedAccessoryId = item.id; renderAccessorySettingsList(); });
-    card.append(image, meta, remove);
-    host.append(card);
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.name || `Aksesori ${index + 1}`;
+    option.selected = item.id === selected.id;
+    select.append(option);
   });
+  select.addEventListener("change", () => { selectedAccessoryId = select.value; renderAccessorySettingsList(); });
+  selector.append(label, select);
+
+  const editor = document.createElement("div");
+  editor.className = "accessory-editor";
+  const preview = document.createElement("img");
+  preview.className = "accessory-editor-preview";
+  preview.src = selected.src || "";
+  preview.alt = selected.name || "Pratinjau aksesori";
+  const heading = document.createElement("div");
+  heading.className = "accessory-editor-heading";
+  const name = document.createElement("strong");
+  name.textContent = selected.name || "Aksesori";
+  const hint = document.createElement("small");
+  hint.textContent = "Pilih stikernya, lalu geser langsung di preview karakter.";
+  heading.append(name, hint);
+  const top = document.createElement("div");
+  top.className = "accessory-editor-top";
+  top.append(preview, heading);
+  const controls = document.createElement("div");
+  controls.className = "accessory-editor-controls";
+
+  const addRange = (key, title, min, max, step, initial, format, update) => {
+    const field = document.createElement("label");
+    field.className = "accessory-editor-control";
+    const caption = document.createElement("span");
+    caption.className = "accessory-editor-caption";
+    const captionText = document.createElement("span");
+    captionText.textContent = title;
+    const value = document.createElement("strong");
+    const read = () => Number(initial());
+    value.textContent = format(read());
+    caption.append(captionText, value);
+    const input = document.createElement("input");
+    input.type = "range"; input.min = String(min); input.max = String(max);
+    input.step = String(step); input.value = String(read()); input.dataset.transform = key;
+    const apply = immediate => {
+      const next = Number(input.value);
+      update(next); value.textContent = format(next); drawPreview();
+      scheduleAccessorySave(selected, immediate ? 0 : 350);
+    };
+    input.addEventListener("input", () => apply(false));
+    input.addEventListener("change", () => apply(true));
+    field.append(caption, input); controls.append(field);
+  };
+
+  addRange("scale", "Scale", 25, 400, 5,
+    () => Math.round((Number(selected.w || 0.18) / 0.18) * 100),
+    value => `${value}%`,
+    value => {
+      const oldW = Math.max(0.01, Number(selected.w || 0.18));
+      const oldH = Math.max(0.01, Number(selected.h || 0.18));
+      const ratio = oldH / oldW;
+      selected.w = Math.max(0.045, Math.min(0.72, 0.18 * value / 100));
+      selected.h = Math.max(0.01, Math.min(2, selected.w * ratio));
+    });
+  addRange("rotation", "Rotation", -180, 180, 1,
+    () => Math.round(Number(selected.rotation) || 0), value => `${value}°`,
+    value => { selected.rotation = value; });
+  addRange("x", "Position X", 0, 100, 1,
+    () => Math.round(Number(selected.x ?? 0.5) * 100), value => `${value}%`,
+    value => { selected.x = value / 100; });
+  addRange("y", "Position Y", 0, 100, 1,
+    () => Math.round(Number(selected.y ?? 0.5) * 100), value => `${value}%`,
+    value => { selected.y = value / 100; });
+
+  const remove = document.createElement("button");
+  remove.type = "button"; remove.className = "button button-danger accessory-editor-remove";
+  remove.textContent = "Hapus aksesori";
+  remove.addEventListener("click", async () => {
+    remove.disabled = true;
+    try {
+      const deletion = await api("delete_accessory", { accessory_id: selected.id });
+      characterAccessories = characterAccessories.filter(entry => entry.id !== selected.id);
+      selectedAccessoryId = characterAccessories[0]?.id || null;
+      drawPreview(); renderAccessorySettingsList(); renderAccessoryQuickScales();
+      if (deletion.cleanup_pending) showAppToast("File aksesori masih menunggu penghapusan Storage.", "error");
+      if (currentRoom) await loadRoomMembers();
+      await broadcastMemberAssetsUpdated();
+    } catch (error) {
+      remove.disabled = false;
+      showAppToast(`Gagal menghapus aksesori: ${error.message}`, "error");
+    }
+  });
+  editor.append(top, controls, remove);
+  host.append(selector, editor);
 }
 
 function renderAccessoryQuickScales() {
   const host = $("accessoryScaleControls");
   if (!host) return;
   host.replaceChildren();
-  host.hidden = !characterAccessories.length;
-  characterAccessories.forEach((item, index) => {
-    const row = document.createElement("div"); row.className = "accessory-quick-scale";
-    const label = document.createElement("span"); label.textContent = `Aksesori ${index + 1}`;
-    const controls = document.createElement("div"); controls.className = "stepper-control";
-    const value = document.createElement("strong");
-    const read = () => Math.round((Number(item.w || .18) / .18) * 100);
-    value.textContent = `${read()}%`;
-    const update = async delta => {
-      const oldW = Number(item.w || .18), oldH = Number(item.h || .18);
-      const ratio = oldH / Math.max(.01, oldW);
-      const nextW = Math.max(.04, Math.min(.8, oldW + delta * .009));
-      item.w = nextW; item.h = Math.max(.01, Math.min(2, nextW * ratio));
-      value.textContent = `${read()}%`;
-      drawPreview(); await saveAccessorySettings(item);
-    };
-    const minus = document.createElement("button"); minus.type = "button"; minus.className = "stepper-button"; minus.textContent = "−";
-    minus.addEventListener("click", () => update(-1));
-    const plus = document.createElement("button"); plus.type = "button"; plus.className = "stepper-button"; plus.textContent = "+";
-    plus.addEventListener("click", () => update(1));
-    controls.append(minus, value, plus); row.append(label, controls); host.append(row);
-  });
+  host.hidden = true;
+}
+
+function scheduleAccessorySave(item, delay = 350) {
+  const previous = accessorySaveTimers.get(item.id);
+  if (previous) clearTimeout(previous);
+  if (delay <= 0) {
+    accessorySaveTimers.delete(item.id);
+    saveAccessorySettings(item);
+    return;
+  }
+  const timer = setTimeout(() => { accessorySaveTimers.delete(item.id); saveAccessorySettings(item); }, delay);
+  accessorySaveTimers.set(item.id, timer);
 }
 
 async function saveAccessorySettings(item) {
@@ -1499,23 +1560,22 @@ function accessoryScreenBounds(item, canvas) {
   const localY = (Number(item.y ?? 0.5) - 0.5) * H;
   const follows = item.follow !== false;
   const motion = avatarRenderer?.avatarMotion || { centerX: W / 2, centerY: H / 2, rotation: 0, scaleX: 1, scaleY: 1 };
-  let x = localX + W / 2, y = localY + H / 2;
-  let scaleX = 1, scaleY = 1;
-  if (follows) {
-    const dx = localX * motion.scaleX, dy = localY * motion.scaleY;
-    const cos = Math.cos(motion.rotation), sin = Math.sin(motion.rotation);
-    x = motion.centerX + cos * dx - sin * dy;
-    y = motion.centerY + sin * dx + cos * dy;
-    scaleX = Math.abs(motion.scaleX);
-    scaleY = Math.abs(motion.scaleY);
-  }
-  return {
-    x, y,
-    width: Math.max(1, Number(item.w || 0.18) * W * scaleX),
-    height: Math.max(1, Number(item.h || 0.18) * H * scaleY),
-    motion: { ...motion },
-    follows
-  };
+  const avatarAngle = follows ? Number(motion.rotation) || 0 : 0;
+  const stickerAngle = (Number(item.rotation) || 0) * Math.PI / 180;
+  const cosA = Math.cos(avatarAngle), sinA = Math.sin(avatarAngle);
+  const cosS = Math.cos(stickerAngle), sinS = Math.sin(stickerAngle);
+  const scaleX = follows ? Number(motion.scaleX) || 1 : 1;
+  const scaleY = follows ? Number(motion.scaleY) || 1 : 1;
+  const a = cosA * scaleX * cosS - sinA * scaleY * sinS;
+  const b = sinA * scaleX * cosS + cosA * scaleY * sinS;
+  const c = -cosA * scaleX * sinS - sinA * scaleY * cosS;
+  const d = -sinA * scaleX * sinS + cosA * scaleY * cosS;
+  const x = follows ? motion.centerX + cosA * scaleX * localX - sinA * scaleY * localY : W / 2 + localX;
+  const y = follows ? motion.centerY + sinA * scaleX * localX + cosA * scaleY * localY : H / 2 + localY;
+  const width = Math.max(1, Number(item.w || 0.18) * W);
+  const height = Math.max(1, Number(item.h || 0.18) * H);
+  return { x, y, halfWidth: Math.abs(a) * width / 2 + Math.abs(c) * height / 2,
+    halfHeight: Math.abs(b) * width / 2 + Math.abs(d) * height / 2, motion: { ...motion }, follows };
 }
 
 function bindAccessoryCanvasDrag(canvas) {
@@ -1524,50 +1584,37 @@ function bindAccessoryCanvasDrag(canvas) {
   canvas.style.touchAction = "none";
   canvas.style.cursor = "grab";
   canvas.addEventListener("pointerdown", event => {
-    if (!characterAccessories.length) return;
+    if (!characterAccessories.length || (event.pointerType === "mouse" && event.button !== 0)) return;
     const point = accessoryCanvasPoint(event, canvas);
     let selected = null;
     for (const item of [...characterAccessories].reverse()) {
       const bounds = accessoryScreenBounds(item, canvas);
-      if (Math.abs(point.x - bounds.x) <= bounds.width / 2 + 10 && Math.abs(point.y - bounds.y) <= bounds.height / 2 + 10) {
-        selected = { item, bounds };
-        break;
+      if (Math.abs(point.x - bounds.x) <= bounds.halfWidth + 8 && Math.abs(point.y - bounds.y) <= bounds.halfHeight + 8) {
+        selected = { item, bounds }; break;
       }
-    }
-    if (!selected && selectedAccessoryId) {
-      const item = characterAccessories.find(entry => entry.id === selectedAccessoryId);
-      if (item) selected = { item, bounds: accessoryScreenBounds(item, canvas) };
     }
     if (!selected) return;
     event.preventDefault();
     selectedAccessoryId = selected.item.id;
-    accessoryDragState = {
-      pointerId: event.pointerId,
-      item: selected.item,
-      startX: point.x,
-      startY: point.y,
-      itemX: Number(selected.item.x ?? 0.5),
-      itemY: Number(selected.item.y ?? 0.5),
-      motion: selected.bounds.motion,
-      follows: selected.bounds.follows
-    };
-    canvas.setPointerCapture(event.pointerId);
+    accessoryDragState = { pointerId: event.pointerId, item: selected.item, startX: point.x, startY: point.y,
+      itemX: Number(selected.item.x ?? 0.5), itemY: Number(selected.item.y ?? 0.5),
+      motion: selected.bounds.motion, follows: selected.bounds.follows };
+    try { canvas.setPointerCapture(event.pointerId); } catch {}
     canvas.style.cursor = "grabbing";
     renderAccessorySettingsList();
   });
   canvas.addEventListener("pointermove", event => {
     if (!accessoryDragState || accessoryDragState.pointerId !== event.pointerId) return;
     const point = accessoryCanvasPoint(event, canvas);
-    const dx = point.x - accessoryDragState.startX;
-    const dy = point.y - accessoryDragState.startY;
+    const dx = point.x - accessoryDragState.startX, dy = point.y - accessoryDragState.startY;
     let localDx = dx, localDy = dy;
     if (accessoryDragState.follows) {
       const motion = accessoryDragState.motion;
-      const cos = Math.cos(motion.rotation), sin = Math.sin(motion.rotation);
-      const rotatedX = cos * dx + sin * dy;
-      const rotatedY = -sin * dx + cos * dy;
-      localDx = rotatedX / (Math.abs(motion.scaleX) < 0.0001 ? 1 : motion.scaleX);
-      localDy = rotatedY / (Math.abs(motion.scaleY) < 0.0001 ? 1 : motion.scaleY);
+      const cos = Math.cos(Number(motion.rotation) || 0), sin = Math.sin(Number(motion.rotation) || 0);
+      const rotatedX = cos * dx + sin * dy, rotatedY = -sin * dx + cos * dy;
+      const sx = Math.abs(Number(motion.scaleX) || 1) < 0.0001 ? 1 : Number(motion.scaleX) || 1;
+      const sy = Math.abs(Number(motion.scaleY) || 1) < 0.0001 ? 1 : Number(motion.scaleY) || 1;
+      localDx = rotatedX / sx; localDy = rotatedY / sy;
     }
     accessoryDragState.item.x = Math.max(0, Math.min(1, accessoryDragState.itemX + localDx / canvas.width));
     accessoryDragState.item.y = Math.max(0, Math.min(1, accessoryDragState.itemY + localDy / canvas.height));
@@ -1576,14 +1623,14 @@ function bindAccessoryCanvasDrag(canvas) {
   const finishDrag = async event => {
     if (!accessoryDragState || accessoryDragState.pointerId !== event.pointerId) return;
     const item = accessoryDragState.item;
-    accessoryDragState = null;
-    canvas.style.cursor = "grab";
+    accessoryDragState = null; canvas.style.cursor = "grab";
     try { if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId); } catch {}
     await saveAccessorySettings(item);
     renderAccessorySettingsList();
   };
   canvas.addEventListener("pointerup", finishDrag);
   canvas.addEventListener("pointercancel", finishDrag);
+  canvas.addEventListener("lostpointercapture", event => { if (accessoryDragState?.pointerId === event.pointerId) finishDrag(event); });
 }
 
 function openRoomChooser() {
