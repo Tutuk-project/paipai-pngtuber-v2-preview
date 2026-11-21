@@ -161,7 +161,7 @@ test("accessories can be selected and dragged directly on the avatar canvas", ()
   assert.ok(app.includes("accessoryDragState.item.x"));
   assert.ok(app.includes("accessoryDragState.item.y"));
   assert.ok(app.includes("await saveAccessorySettings(item)"));
-  assert.ok(app.includes("selectedAccessoryId = item.id"));
+  assert.ok(app.includes("selectedAccessoryId = selected.item.id"));
 });
 
 test("accessory deletion queues durable Storage cleanup before deleting metadata", () => {
