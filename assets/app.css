@@ -360,3 +360,639 @@
   max-height:none!important;aspect-ratio:16/9!important;object-fit:contain;
 }
 
+
+/* Vio Studio Creator Studio mobile refresh — presentation layer only. */
+@media (max-width: 760px) {
+  :root {
+    color-scheme: dark;
+    --bg: #0A0716;
+    --surface: rgba(20, 13, 39, .88);
+    --surface2: rgba(30, 20, 57, .82);
+    --line: rgba(157, 123, 255, .30);
+    --text: #F5F1FF;
+    --muted: #B3A9D6;
+    --mint: #5CF2FF;
+    --lilac: #9D7BFF;
+    --coral: #FF5CCB;
+    --danger: #FF8CA8;
+    --shadow: 0 18px 48px rgba(0,0,0,.48), 0 0 24px rgba(157,123,255,.10);
+    --radius: 24px;
+  }
+
+  html, body {
+    min-height: 100%;
+    background:
+      radial-gradient(circle at 100% 0%, rgba(255,92,203,.18), transparent 42%),
+      radial-gradient(circle at 0% 62%, rgba(92,242,255,.11), transparent 48%),
+      repeating-linear-gradient(0deg, rgba(157,123,255,.045) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(157,123,255,.045) 0 1px, transparent 1px 32px),
+      #0A0716;
+    color: var(--text);
+  }
+
+  .app-shell {
+    display: block !important;
+    width: 100%;
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  .app-shell > .workspace {
+    display: flex !important;
+    flex-direction: column;
+    width: 100%;
+    max-width: 600px;
+    min-width: 0;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: max(16px, env(safe-area-inset-top)) 14px calc(112px + env(safe-area-inset-bottom));
+    gap: 16px;
+  }
+
+  .app-shell > .sidebar {
+    display: none !important;
+  }
+
+  .app-shell.mobile-menu-open > .sidebar {
+    display: flex !important;
+    position: fixed !important;
+    inset: max(12px, env(safe-area-inset-top)) auto calc(12px + env(safe-area-inset-bottom)) 12px !important;
+    width: min(286px, calc(100vw - 48px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 18px 14px 14px !important;
+    border: 1px solid rgba(157,123,255,.42) !important;
+    border-radius: 24px !important;
+    background: rgba(14, 9, 29, .97) !important;
+    box-shadow: 18px 0 70px rgba(0,0,0,.62), 0 0 34px rgba(157,123,255,.16) !important;
+    backdrop-filter: blur(24px);
+    z-index: 70 !important;
+  }
+
+  .app-shell.mobile-menu-open .sidebar .brand-copy,
+  .app-shell.mobile-menu-open .sidebar .nav-label,
+  .app-shell.mobile-menu-open .sidebar .account-copy {
+    display: block !important;
+  }
+
+  .app-shell.mobile-menu-open .sidebar .sidebar-brand {
+    justify-content: flex-start;
+  }
+
+  .app-shell.mobile-menu-open .sidebar .nav-item {
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
+  .app-shell.mobile-menu-open .sidebar .nav-icon {
+    width: 24px;
+  }
+
+  .app-shell.mobile-menu-open .sidebar .sidebar-toggle {
+    position: absolute;
+    right: -13px;
+    top: 50%;
+    left: auto;
+    transform: translateY(-50%);
+    border: 1px solid rgba(92,242,255,.52);
+    border-left: 0;
+    border-radius: 0 12px 12px 0;
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    border: 0;
+    border-radius: 0;
+    background: rgba(3, 2, 10, .70);
+    backdrop-filter: blur(5px);
+  }
+
+  .mobile-menu-backdrop[hidden] {
+    display: none !important;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 54px;
+    padding: 2px 2px 8px;
+  }
+
+  .mobile-brand {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 11px;
+  }
+
+  .mobile-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    border-radius: 15px;
+    color: #12081F;
+    background: linear-gradient(135deg, #FF5CCB, #9D7BFF);
+    box-shadow: 0 0 24px rgba(255,92,203,.40);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+  }
+
+  .mobile-brand-copy {
+    min-width: 0;
+  }
+
+  .topbar .eyebrow,
+  .eyebrow {
+    color: var(--mint);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 9px;
+    letter-spacing: .19em;
+  }
+
+  .topbar h1 {
+    margin: 2px 0 0;
+    color: var(--text);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: clamp(19px, 5.2vw, 23px);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -.025em;
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    gap: 7px;
+  }
+
+  .topbar-actions .status-pill {
+    display: none !important;
+  }
+
+  .mobile-menu-button {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid rgba(157,123,255,.38);
+    border-radius: 14px;
+    color: var(--text);
+    background: rgba(157,123,255,.12);
+    font-size: 20px;
+  }
+
+  .mobile-menu-button[aria-expanded="true"] {
+    border-color: rgba(92,242,255,.65);
+    color: var(--mint);
+  }
+
+  #topRoomButton {
+    min-height: 42px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #FF5CCB, #9D7BFF);
+    color: #12081F;
+    box-shadow: 0 0 22px rgba(157,123,255,.36);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .view {
+    display: grid;
+    min-width: 0;
+    gap: 15px;
+  }
+
+  .panel-card {
+    border: 1px solid rgba(157,123,255,.30);
+    border-radius: 25px;
+    background: rgba(255,255,255,.045);
+    box-shadow: 0 0 34px rgba(157,123,255,.12), 0 18px 42px rgba(0,0,0,.24);
+    backdrop-filter: blur(16px);
+  }
+
+  .preview-card {
+    width: 100%;
+    min-width: 0;
+    align-self: start;
+    overflow: hidden;
+  }
+
+  .preview-card .card-heading {
+    display: grid;
+    align-items: start;
+    justify-content: stretch;
+    gap: 13px;
+    padding: 17px 17px 14px;
+    border-bottom: 1px solid rgba(157,123,255,.23);
+  }
+
+  .preview-card .card-heading h2,
+  .settings-panel .card-heading h2 {
+    margin: 3px 0 0;
+    color: var(--text);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .preview-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .preview-actions .status-pill {
+    display: none !important;
+  }
+
+  .preview-actions .button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .preview-actions .mic-toggle {
+    border: 0;
+    color: #07131A;
+    background: linear-gradient(135deg, #5CF2FF, #7CFFC8);
+    box-shadow: 0 0 22px rgba(92,242,255,.34);
+  }
+
+  .preview-actions .mic-toggle:not(.is-mic-on) {
+    border: 1px solid rgba(92,242,255,.36);
+    color: var(--mint);
+    background: rgba(92,242,255,.10);
+    box-shadow: none;
+  }
+
+  .preview-actions #obsLinkButton {
+    border: 1px solid rgba(157,123,255,.60);
+    color: var(--text);
+    background: rgba(157,123,255,.13);
+  }
+
+  .stage-frame {
+    width: auto;
+    margin: 12px;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 22px;
+    background-color: rgba(10,7,22,.72);
+    box-shadow: 0 0 0 1px rgba(92,242,255,.32), 0 0 38px rgba(255,92,203,.18);
+  }
+
+  .stage-frame canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .empty-stage {
+    padding: 12px;
+    text-align: center;
+  }
+
+  .empty-stage strong {
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 16px;
+  }
+
+  .preview-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 0 17px 17px;
+  }
+
+  .meter-wrap {
+    min-width: 0;
+  }
+
+  .meter-caption {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .meter-caption strong {
+    color: var(--mint);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 16px;
+  }
+
+  .meter-track {
+    height: 12px;
+    border-radius: 4px;
+    background: repeating-linear-gradient(90deg, #2C2350 0 9px, transparent 9px 12px);
+  }
+
+  .meter-track i {
+    border-radius: 4px;
+    background: repeating-linear-gradient(90deg, #5CF2FF 0 9px, transparent 9px 12px);
+    box-shadow: 0 0 12px rgba(92,242,255,.8);
+  }
+
+  .expression-tag {
+    color: var(--mint);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 12px;
+  }
+
+  .avatar-scale-control {
+    min-height: 58px;
+    margin-left: auto;
+    padding: 6px 8px;
+    border: 1px solid rgba(157,123,255,.28);
+    border-radius: 18px;
+    background: rgba(10,7,22,.55);
+  }
+
+  .avatar-scale-control strong {
+    color: var(--text);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 16px;
+  }
+
+  .stepper-button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(157,123,255,.48);
+    border-radius: 13px;
+    color: var(--text);
+    background: rgba(10,7,22,.62);
+  }
+
+  .settings-panel {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .settings-panel .card-heading {
+    min-height: 0;
+    padding: 17px;
+    border-bottom: 1px solid rgba(157,123,255,.23);
+  }
+
+  .settings-content {
+    display: grid;
+    min-width: 0;
+    gap: 13px;
+    padding: 14px;
+  }
+
+  .settings-accordion {
+    border: 1px solid rgba(157,123,255,.34);
+    border-radius: 21px;
+    background: rgba(255,255,255,.045);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  }
+
+  .settings-accordion > summary {
+    min-height: 76px;
+    padding: 13px 14px;
+  }
+
+  .accordion-copy strong {
+    color: var(--text);
+    font-family: "Chakra Petch", "Trebuchet MS", sans-serif;
+    font-size: 17px;
+  }
+
+  .accordion-copy small {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .accordion-chevron {
+    width: 34px;
+    height: 34px;
+    border-color: rgba(157,123,255,.4);
+    color: var(--mint);
+  }
+
+  .accordion-body {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .setting-field label,
+  .setting-field > span,
+  .check-field {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .text-input, .select-input {
+    min-height: 46px;
+    border-color: rgba(157,123,255,.34);
+    border-radius: 13px;
+    background: rgba(10,7,22,.72);
+    color: var(--text);
+  }
+
+  .range-input {
+    accent-color: #5CF2FF;
+  }
+
+  .button, .icon-button {
+    border-color: rgba(157,123,255,.35);
+    border-radius: 13px;
+    font-size: 12px;
+  }
+
+  .button-primary {
+    border: 0;
+    color: #12081F;
+    background: linear-gradient(135deg, #FF5CCB, #9D7BFF);
+    box-shadow: 0 0 18px rgba(157,123,255,.24);
+  }
+
+  .workspace-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 8px 4px 0;
+    color: rgba(179,169,214,.58);
+    font-size: 9px;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    z-index: 55;
+    right: 14px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: 14px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0,1fr));
+    align-items: center;
+    gap: 2px;
+    min-height: 72px;
+    padding: 7px 6px;
+    border: 1px solid rgba(157,123,255,.43);
+    border-radius: 24px;
+    background: rgba(18,12,38,.91);
+    box-shadow: 0 0 30px rgba(157,123,255,.23), 0 16px 42px rgba(0,0,0,.44);
+    backdrop-filter: blur(20px);
+  }
+
+  .mobile-bottom-nav[hidden] {
+    display: none !important;
+  }
+
+  .mobile-dock-item {
+    display: flex;
+    min-width: 0;
+    min-height: 56px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 2px;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    color: #B3A9D6;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-dock-item svg {
+    display: block;
+    width: 23px;
+    height: 23px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .mobile-dock-item span {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    font-size: 9px;
+    font-weight: 650;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-dock-item.is-active {
+    border-color: transparent;
+    color: #12081F;
+    background: linear-gradient(135deg, #FF5CCB, #9D7BFF);
+    box-shadow: 0 0 20px rgba(255,92,203,.42);
+  }
+
+  .app-toast {
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .login-gate {
+    z-index: 90;
+    padding: 14px;
+  }
+
+  .login-card {
+    width: min(100%, 390px);
+    padding: 26px 22px;
+    border: 1px solid rgba(157,123,255,.34);
+    background: rgba(15,10,31,.96);
+  }
+
+  .app-shell.in-room {
+    overflow-x: hidden;
+  }
+
+  .app-shell.in-room > .workspace {
+    padding: max(12px, env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .app-shell.in-room .topbar-actions {
+    display: none;
+  }
+
+  .app-shell.in-room .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  .app-shell.in-room .room-toolbar,
+  .app-shell.in-room .collab-preview,
+  .app-shell.in-room #collaborationView > .settings-panel {
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 390px) {
+  .app-shell > .workspace {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .mobile-brand-mark {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  .topbar-actions {
+    gap: 5px;
+  }
+
+  .mobile-menu-button {
+    width: 38px;
+    height: 40px;
+  }
+
+  #topRoomButton {
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .preview-card .card-heading {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .preview-actions {
+    grid-template-columns: 104px minmax(0,1fr);
+    gap: 7px;
+  }
+
+  .preview-actions .button {
+    font-size: 11px;
+  }
+}
+
+@media (min-width: 761px) {
+  .mobile-brand-mark,
+  .mobile-menu-button,
+  .mobile-bottom-nav,
+  .mobile-menu-backdrop {
+    display: none !important;
+  }
+
+  .mobile-brand {
+    display: contents;
+  }
+}
+
