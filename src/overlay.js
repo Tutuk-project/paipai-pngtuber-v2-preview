@@ -105,7 +105,7 @@ function updateLocalMicState(state) {
 async function startOverlayMicrophone() {
   if (!localMicUserId || localMicEngine) return;
   const host = members.find(member => member.user_id === localMicUserId);
-  // Capture from a direct button gesture so Android WebViews can grant mic permission.
+  // Request microphone capture as soon as the OBS source resolves its host identity.
   localMicEngine = new AudioEngine({
     deviceId: host?.preferences?.deviceId || "",
     sensitivity: Number(host?.preferences?.sensitivity ?? 1),
@@ -129,7 +129,7 @@ async function startOverlayMicrophone() {
     localMicActive = false;
     localMicEngine = null;
     console.warn("OBS overlay microphone capture unavailable:", error);
-    setStatus("Mic tidak tersedia: " + error.message + ". Tekan Aktifkan Mic dan izinkan akses mikrofon.", true, true);
+    setStatus("Mic tidak tersedia: " + error.message + ". Izinkan mikrofon untuk halaman overlay di pengaturan browser/OBS, lalu muat ulang source.", true, true);
   }
 }
 
@@ -311,7 +311,7 @@ async function refreshMembers() {
   }
   gridEnabled = members.some(member => member.overrides?.showGrid === true) || params.get("grid") === "1";
   centerGuideEnabled = members.some(member => member.overrides?.showCenterGuide === true) || params.get("centerGuide") === "1";
-  updateOverlayControlState();
+  
   const hasAvatarAssets = members.some(member => Object.values(member.assets || {}).some(Boolean));
   if (!hasAvatarAssets) {
     setStatus("Overlay terhubung, tetapi PNG avatar belum ditemukan. Unggah setidaknya ekspresi Idle di Vio Studio > Character.", true);
