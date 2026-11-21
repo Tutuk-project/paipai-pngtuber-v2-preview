@@ -482,11 +482,15 @@ test("About describes the project and retains empty embed/contact placeholders",
   for (const text of ["Vio Studio adalah workspace PNGTuber modular", "Dibuat untuk", "Embed links", "Admin contact", "Account details", "Simpan display name"]) assert.ok(body.includes(text));
 });
 
-test("GitHub Pages uses a unique artifact name for each workflow attempt", () => {
+test("GitHub Pages deploys only after successful validation and uses the exact validated commit", () => {
   const workflow = read(".github/workflows/pages.yml");
   const artifact = "github-pages-${{ github.event.workflow_run.head_sha }}-${{ github.run_attempt }}";
+  assert.match(workflow, /workflow_run:[\s\S]*workflows: \["Validate Vio Studio"\]/);
+  assert.match(workflow, /workflow_run\.conclusion == 'success'/);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
   assert.ok(workflow.includes("name: " + artifact));
   assert.ok(workflow.includes("artifact_name: " + artifact));
+  assert.doesNotMatch(workflow, /^  push:/m);
 });
 
 
