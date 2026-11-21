@@ -1120,7 +1120,7 @@ Deno.serve(async (req) => {
       const { data: membership, error: membershipError } = await db.from("vio_room_members").select("user_id").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
       if (membershipError) throw membershipError;
       if (!membership) return json({ ok: false, error: "You are not a member of this room." }, 403);
-      const { data: members, error } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,name,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides,updated_at)").eq("room_id", roomId);
+      const { data: members, error } = await db.from("vio_room_members").select("user_id,is_host,joined_at,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,name,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides,updated_at)").eq("room_id", roomId).order("is_host", { ascending: false }).order("joined_at", { ascending: true }).order("user_id", { ascending: true });
       if (error) throw error;
       const mapped = await Promise.all((members || []).map(async (member: any) => {
         const activeCharacter = (member.vio_app_users?.characters || []).find((item: any) => item.id === member.vio_app_users?.profile?.active_character_id) || member.vio_characters?.[0];
@@ -1134,7 +1134,7 @@ Deno.serve(async (req) => {
           if (signError || !data?.signedUrl) return null;
           return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation || 0, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
-        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {}, overrides_updated_at: member.vio_room_overrides?.[0]?.updated_at || null };
+        return { user_id: member.user_id, is_host: member.is_host, joined_at: member.joined_at, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {}, overrides_updated_at: member.vio_room_overrides?.[0]?.updated_at || null };
       }));
       return json({ ok: true, members: mapped });
     }
@@ -1343,10 +1343,10 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Overlay link is invalid or room is closed or expired." }, 403);
       }
       const { data: rows, error: memberError } = await db.from("vio_room_members")
-        .select("user_id,state,vio_room_overrides(overrides,updated_at)").eq("room_id", roomId);
+        .select("user_id,is_host,joined_at,state,vio_room_overrides(overrides,updated_at)").eq("room_id", roomId).order("is_host", { ascending: false }).order("joined_at", { ascending: true }).order("user_id", { ascending: true });
       if (memberError) throw memberError;
       return json({ ok: true, members: (rows || []).map((member: any) => ({
-        user_id: member.user_id, state: member.state || "idle",
+        user_id: member.user_id, is_host: member.is_host, joined_at: member.joined_at, state: member.state || "idle",
         overrides: member.vio_room_overrides?.[0]?.overrides || {},
         updated_at: member.vio_room_overrides?.[0]?.updated_at || null
       })) });
@@ -1360,7 +1360,7 @@ Deno.serve(async (req) => {
       if (error || !room || room.status !== "active" || new Date(room.expires_at).getTime() <= Date.now() || room.overlay_token_hash !== await sha256(token)) return json({ ok: false, error: "Overlay link is invalid or room is closed or expired." }, 403);
       const { error: deviceError } = await db.from("vio_overlay_devices").upsert({ auth_user_id: authUser.id, room_id: roomId }, { onConflict: "auth_user_id" });
       if (deviceError) throw deviceError;
-      const { data: members, error: memberError } = await db.from("vio_room_members").select("user_id,is_host,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides)").eq("room_id", roomId);
+      const { data: members, error: memberError } = await db.from("vio_room_members").select("user_id,is_host,joined_at,state,state_updated_at,vio_app_users!inner(username,profile:vio_profiles!inner(preferences,active_character_id),characters:vio_characters(id,vio_character_assets(expression,storage_path,bucket_id),vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,rotation,mirror,follow_avatar,effects_enabled,sort_order))),vio_room_overrides(overrides)").eq("room_id", roomId).order("is_host", { ascending: false }).order("joined_at", { ascending: true }).order("user_id", { ascending: true });
       if (memberError) throw memberError;
       const mapped = await Promise.all((members || []).map(async (member: any) => {
         const assets: Record<string, string> = {};
@@ -1374,7 +1374,7 @@ Deno.serve(async (req) => {
           if (signError || !data?.signedUrl) return null;
           return { id: item.id, name: item.name, src: data.signedUrl, x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation || 0, mirror: item.mirror, follow: item.follow_avatar, effectsEnabled: item.effects_enabled, sort_order: item.sort_order };
         }));
-        return { user_id: member.user_id, is_host: member.is_host, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
+        return { user_id: member.user_id, is_host: member.is_host, joined_at: member.joined_at, username: member.vio_app_users?.username || "Unknown", state: member.state || "idle", state_updated_at: member.state_updated_at, assets, accessories: accessories.filter(Boolean), preferences: await signBackground(db, member.vio_app_users?.profile?.preferences || {}), overrides: member.vio_room_overrides?.[0]?.overrides || {} };
       }));
       return json({ ok: true, room: { id: room.id, purpose: room.purpose, capacity: room.capacity, host_user_id: room.host_user_id }, members: mapped });
     }
