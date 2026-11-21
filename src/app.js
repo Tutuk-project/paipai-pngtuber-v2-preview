@@ -1910,7 +1910,7 @@ function renderRoomParticipants() {
       ...(member.preferences || {}),
       scale: overrides.scale ?? member.preferences?.scale ?? 1,
       avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent,
-      offsetX: Math.max(-100, Math.min(100, Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : 0)) * playerWidth * 0.004,
+      offsetX: Math.max(-100, Math.min(100, Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (index - (visible.length - 1) / 2) * 34)) * playerWidth * 0.004,
       offsetY: Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * playerHeight * 0.0035
     };
     entry.renderer.setAssets(member.assets || {});
