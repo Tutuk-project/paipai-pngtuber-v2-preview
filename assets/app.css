@@ -351,3 +351,11 @@
  .app-shell.in-room .collab-stage-wrap>canvas{height:min(40vh,320px)!important;max-height:320px!important}
  .room-controls-layout{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Final output geometry overrides: square creator preview, landscape Collaboration stage. */
+.stage-frame{height:auto!important;max-height:none!important;aspect-ratio:1/1!important}
+.app-shell.in-room .collab-stage-wrap>canvas,
+.app-shell.in-room #roomStage{
+  display:block;width:100%!important;height:auto!important;max-width:960px!important;
+  max-height:none!important;aspect-ratio:16/9!important;object-fit:contain;
+}
