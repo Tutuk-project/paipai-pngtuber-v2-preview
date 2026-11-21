@@ -62,7 +62,7 @@
 - Corrected the Background upload success path so it stays in Visual + instead of switching back to Avatar.
 - Changed the mobile dock CSS to five columns and cache-busted the stylesheet and app script.
 - GitHub Actions validation for commit `aa0b2ff760399dc55eda630da002bd439f67ac87`: 105 tests passed, 0 failed, 0 skipped. Preview validation also passed.
-- GitHub Pages deployment for that commit was still running at the time this checkpoint note was prepared; verify the final workflow conclusion before treating the public preview as deployed.
+- GitHub Pages deployment for commit `aa0b2ff760399dc55eda630da002bd439f67ac87` completed successfully. The subsequent checkpoint documentation commit `3677b78daff84a8d0193b9562d8c0f6354f0dbd6` also passed Validate Vio Studio, Preview validation, and GitHub Pages deployment.
 - Runtime upload test for PNG/WebP and real-time OBS Browser Source test still require the user's authenticated Android Chrome session and an already-generated room link. Those tests cannot be honestly marked passed from static CI.
 
 ## Remaining device verification
@@ -72,3 +72,11 @@
 3. Keep an existing Collaboration OBS URL open; drag X/Y/scale and confirm the character moves without regenerating the URL.
 4. Confirm grid and center dummy appear in Creator preview only, not in OBS.
 5. Confirm background upload returns to Visual + and the saved background remains after refresh.
+
+
+## Final verification addendum — 21 November 2026
+
+- Latest recorded checkpoint commit: `3677b78daff84a8d0193b9562d8c0f6354f0dbd6`.
+- Confirmed final CI conclusions for that commit: Validate Vio Studio = success; Preview validation = success; Deploy Vio Studio v2 Preview = success.
+- The earlier note about pending Pages deployment is superseded by the successful workflow result.
+- Remaining limitation: live Android Chrome accessory upload, persistent refresh, room synchronization, and OBS Browser Source behavior still need manual device verification.
