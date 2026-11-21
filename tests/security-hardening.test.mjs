@@ -406,7 +406,7 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
   const overlay = read("src/overlay.js");
   const html = read("index.html");
   assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
-  assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js"/);
+  assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js\?v=/);
   assert.match(app, /function drawPreview\(\)/);
   assert.match(app, /async function generateOverlayLink\(/);
   assert.match(app, /async function enterRoom\(/);
