@@ -31,7 +31,7 @@ let activeCharacterId = null;
 let activeMakeupEffect = null;
 let characterDeleteDialog = null;
 let avatarScalePercent = 0;
-let profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 1080, outputHeight: 1920, sensitivity: 1, boostDb: 6, deviceId: "" };
+let profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 500, outputHeight: 500, sensitivity: 1, boostDb: 6, deviceId: "" };
 let roomOverrides = { scale: 1, x: 0, y: 0, sensitivity: 1, boostDb: 6, deviceId: "", showGrid: false, showCenterGuide: false };
 let renderFrame = 0;
 let lastRoomStageFrame = 0;
@@ -1347,24 +1347,17 @@ let previewBlinkTimer = 0;
 
 function drawPreview() {
   const canvas = $("avatarCanvas");
-  const width = Math.max(320, Math.min(3840, Math.round(Number(profilePreferences.outputWidth) || 1080)));
-  const height = Math.max(320, Math.min(3840, Math.round(Number(profilePreferences.outputHeight) || 1920)));
-  // The editor preview is not the stream output. Render it at a bounded backing
-  // resolution on mobile, while keeping the saved/exported output dimensions intact.
-  const previewScale = Math.min(1, 720 / Math.max(width, height));
-  const previewWidth = Math.max(1, Math.round(width * previewScale));
-  const previewHeight = Math.max(1, Math.round(height * previewScale));
+  // Editor preview is deliberately fixed at 500x500 (1:1). OBS output
+  // keeps the user's independent profile resolution and is sized in overlay.js.
+  const previewWidth = 500;
+  const previewHeight = 500;
   if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
     canvas.width = previewWidth;
     canvas.height = previewHeight;
   }
   const stageFrame = canvas.closest(".stage-frame");
-  if (stageFrame) { stageFrame.style.aspectRatio = `${width} / ${height}`; stageFrame.style.height = "auto"; }
+  if (stageFrame) { stageFrame.style.aspectRatio = "1 / 1"; stageFrame.style.height = "auto"; }
   updateAvatarScaleWidget();
-  const roomStage = $("roomStage");
-  if (roomStage && (roomStage.width !== width || roomStage.height !== height)) {
-    roomStage.width = width; roomStage.height = height; roomStage.style.aspectRatio = `${width} / ${height}`;
-  }
   if (!avatarRenderer) avatarRenderer = new AvatarRenderer(canvas);
   avatarRenderer.start();
   avatarRenderer.setAssets(assetUrls);
@@ -1917,7 +1910,7 @@ function renderRoomParticipants() {
       ...(member.preferences || {}),
       scale: overrides.scale ?? member.preferences?.scale ?? 1,
       avatarScalePercent: overrides.scale != null ? undefined : member.preferences?.avatarScalePercent,
-      offsetX: Math.max(-100, Math.min(100, Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : (index - (visible.length - 1) / 2) * 34)) * playerWidth * 0.004,
+      offsetX: Math.max(-100, Math.min(100, Object.hasOwn(overrides, "x") ? Number(overrides.x) || 0 : 0)) * playerWidth * 0.004,
       offsetY: Math.max(-100, Math.min(100, Number(overrides.y) || 0)) * playerHeight * 0.0035
     };
     entry.renderer.setAssets(member.assets || {});
@@ -1943,8 +1936,8 @@ function renderRoomParticipants() {
 function drawRoomCompositionGrid(ctx, width, height) {
   ctx.save();
   ctx.strokeStyle = "rgba(210,245,235,.98)";
-  ctx.lineWidth = Math.max(6, Math.round(width / 220));
-  ctx.setLineDash([Math.max(8, width / 150), Math.max(7, width / 190)]);
+  ctx.lineWidth = Math.max(18, Math.round(width / 100));
+  ctx.setLineDash([Math.max(18, width / 90), Math.max(14, width / 120)]);
   for (let index = 1; index <= 2; index++) {
     const x = width * index / 3, y = height * index / 3;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
@@ -1952,20 +1945,29 @@ function drawRoomCompositionGrid(ctx, width, height) {
   }
   ctx.setLineDash([]);
   ctx.strokeStyle = "rgba(210,245,235,.95)";
-  ctx.lineWidth = Math.max(5, Math.round(width / 280));
+  ctx.lineWidth = Math.max(12, Math.round(width / 150));
   ctx.strokeRect(width * .02, height * .02, width * .96, height * .96);
   ctx.restore();
 }
 
 function drawRoomCenterGuide(ctx, width, height) {
   const cx = width / 2, cy = height / 2, unit = Math.min(width, height) / 1080;
-  const headR = 54 * unit, bodyW = 112 * unit, bodyH = 150 * unit;
-  ctx.save(); ctx.translate(cx, cy); ctx.strokeStyle = "rgba(255,220,170,.98)"; ctx.fillStyle = "rgba(255,220,170,.24)"; ctx.lineWidth = Math.max(5, 5 * unit);
-  ctx.setLineDash([10 * unit, 7 * unit]); ctx.beginPath(); ctx.moveTo(-width * .13, 0); ctx.lineTo(width * .13, 0); ctx.moveTo(0, -height * .25); ctx.lineTo(0, height * .25); ctx.stroke(); ctx.setLineDash([]);
+  const headR = 72 * unit, bodyW = 170 * unit, bodyH = 220 * unit;
+  ctx.save(); ctx.translate(cx, cy);
+  // Translucent fictional chibi mannequin: a stable center target for avatar placement.
+  ctx.globalAlpha = 0.78;
+  ctx.strokeStyle = "rgba(255,220,170,.98)"; ctx.fillStyle = "rgba(255,220,170,.28)";
+  ctx.lineWidth = Math.max(7, 7 * unit);
+  ctx.setLineDash([14 * unit, 10 * unit]);
+  ctx.beginPath(); ctx.moveTo(-width * .16, 0); ctx.lineTo(width * .16, 0); ctx.moveTo(0, -height * .30); ctx.lineTo(0, height * .30); ctx.stroke(); ctx.setLineDash([]);
   ctx.beginPath(); ctx.arc(0, -bodyH * .72, headR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.roundRect(-bodyW / 2, -bodyH * .48, bodyW, bodyH, 30 * unit); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-bodyW / 2, -bodyH * .30); ctx.lineTo(-bodyW * .95, bodyH * .05); ctx.lineTo(-bodyW * .62, bodyH * .34); ctx.moveTo(bodyW / 2, -bodyH * .30); ctx.lineTo(bodyW * .95, bodyH * .05); ctx.lineTo(bodyW * .62, bodyH * .34); ctx.stroke();
-  ctx.font = "700 " + (22 * unit) + "px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,235,200,.98)"; ctx.fillText("CENTER GUIDE", 0, bodyH * .88); ctx.restore();
+  ctx.beginPath(); ctx.arc(0, -bodyH * .80, headR * 1.08, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+  ctx.beginPath(); ctx.arc(-headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); ctx.arc(headR * .34, -bodyH * .73, 5 * unit, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(-bodyW / 2, -bodyH * .42, bodyW, bodyH * .92, 42 * unit); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-bodyW / 2, -bodyH * .25); ctx.lineTo(-bodyW * .92, bodyH * .02); ctx.lineTo(-bodyW * .72, bodyH * .36); ctx.moveTo(bodyW / 2, -bodyH * .25); ctx.lineTo(bodyW * .92, bodyH * .02); ctx.lineTo(bodyW * .72, bodyH * .36); ctx.stroke();
+  ctx.font = "800 " + (24 * unit) + "px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,235,200,.98)";
+  ctx.fillText("AVATAR CENTER", 0, bodyH * .72);
+  ctx.restore();
 }
 
 function drawRoomStageFrame(now = performance.now()) {
@@ -2072,6 +2074,7 @@ async function generateOverlayLink(button = null) {
     url.hash = new URLSearchParams({ room: result.room_id, token: result.overlay_token }).toString();
     // Keep the generated OBS source clean: microphone state comes from the Creator session.
     // Collaboration guides are controlled in Creator and broadcast to the overlay.
+    if (room.purpose === "collaboration") url.searchParams.set("controls", "1");
     generatedOverlayUrl = url.toString();
     $("overlayLinkUrl").value = generatedOverlayUrl;
     syncOverlayGeneratorButtons("Salin Link", false, "copy");
