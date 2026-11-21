@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AvatarRenderer, resolveRoomAvatarPreferences } from "../src/avatar-renderer.js";
+import { AvatarRenderer, compareRoomMembers, resolveRoomAvatarPreferences, sortRoomMembers } from "../src/avatar-renderer.js";
 
 test("room layout transform produces predictable stage-relative X/Y values", () => {
   const profile = { scale: 1.1, avatarScalePercent: 10, background: { mode: "image", src: "signed-bg" } };
@@ -64,4 +64,60 @@ test("room position changes persist during dragging and flush on touch release",
   assert.match(app, /range\.addEventListener\("touchend", flushLayout/);
   assert.match(app, /api\("set_room_override", \{ room_id: currentRoom\.id, overrides: snapshot \}\)/);
   assert.match(app, /await broadcastPlayerLayout\(\)/);
+});
+
+
+test("collaboration member ordering is host-first, join-time stable, then user-id", () => {
+  const host = { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z" };
+  const b = { user_id: "b", is_host: false, joined_at: "2026-11-21T04:01:00Z", state: "idle" };
+  const c = { user_id: "c", is_host: false, joined_at: "2026-11-21T04:02:00Z", state: "talking" };
+  assert.deepEqual(sortRoomMembers([c, b, host]).map(member => member.user_id), ["host", "b", "c"]);
+  const updatedB = { ...b, state: "talking", state_updated_at: "2026-11-21T04:03:00Z" };
+  assert.equal(compareRoomMembers(host, updatedB), -1);
+  assert.deepEqual(sortRoomMembers([c, updatedB, host]).map(member => member.user_id), ["host", "b", "c"]);
+});
+
+test("join, leave and rejoin recompute rank without changing identity or host transform", () => {
+  const host = { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z", overrides: { x: 0, y: 0, scale: 1 } };
+  const b = { user_id: "b", is_host: false, joined_at: "2026-11-21T04:01:00Z", overrides: { x: 18, y: 0, scale: 1 } };
+  const c = { user_id: "c", is_host: false, joined_at: "2026-11-21T04:02:00Z", overrides: {} };
+  const rank = members => sortRoomMembers(members).map((member, index, list) => ({
+    id: member.user_id,
+    layout: resolveRoomAvatarPreferences({}, member.overrides, 1920, 1080, index, list.length)
+  }));
+  const hostOnly = rank([host]);
+  assert.equal(hostOnly[0].layout.offsetX, 0);
+  const joinedBC = rank([c, host, b]);
+  assert.deepEqual(joinedBC.map(item => item.id), ["host", "b", "c"]);
+  assert.equal(joinedBC.find(item => item.id === "host").layout.offsetX, 0);
+  const afterBLeaves = rank([host, c]);
+  assert.deepEqual(afterBLeaves.map(item => item.id), ["host", "c"]);
+  const rejoinedB = { ...b, joined_at: "2026-11-21T04:04:00Z" };
+  const afterBRejoins = rank([c, rejoinedB, host]);
+  assert.deepEqual(afterBRejoins.map(item => item.id), ["host", "c", "b"]);
+  assert.equal(afterBRejoins.find(item => item.id === "host").layout.offsetX, 0);
+});
+
+test("collaboration stage and OBS draw one host background before transparent member sprites", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+  const overlay = await readFile(new URL("../src/overlay.js", import.meta.url), "utf8");
+  const appFrame = app.slice(app.indexOf("function drawRoomStageFrame("), app.indexOf("async function leaveRoom(", app.indexOf("function drawRoomStageFrame(")));
+  const overlayFrame = overlay.slice(overlay.indexOf("function drawCompositeFrame("), overlay.indexOf("function render()", overlay.indexOf("function drawCompositeFrame(")));
+  assert.match(app, /const spriteProfile = \{ \.\.\.profile, background: \{ mode: "transparent" \} \}/);
+  assert.match(overlay, /roomPurpose === "collaboration" \? \{ \.\.\.profile, background: \{ mode: "transparent" \} \} : profile/);
+  assert.ok(appFrame.indexOf("roomBackgroundRenderer?.drawBackgroundTo") < appFrame.indexOf("ctx.drawImage(entry.canvas"));
+  assert.ok(overlayFrame.indexOf("roomBackgroundRenderer?.drawBackgroundTo") < overlayFrame.indexOf("ctx.drawImage(entry.canvas"));
+  assert.equal((appFrame.match(/roomBackgroundRenderer\?\.drawBackgroundTo/g) || []).length, 1);
+  assert.equal((overlayFrame.match(/roomBackgroundRenderer\?\.drawBackgroundTo/g) || []).length, 1);
+});
+
+test("Creator local collaboration rendering reads the same DB override object as remote members", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+  const start = app.indexOf("function renderRoomParticipants()");
+  const end = app.indexOf("function drawRoomCompositionGrid(", start);
+  const block = app.slice(start, end);
+  assert.match(block, /const overrides = member\.overrides \|\| \{\}/);
+  assert.doesNotMatch(block, /\.\.\.roomOverrides/);
 });
