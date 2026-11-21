@@ -1002,3 +1002,21 @@
 .about-link-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
 .about-link-card { display:grid; gap:6px; min-width:0; padding:14px; border:1px solid rgba(92,242,255,.24); border-radius:14px; color:var(--text); background:rgba(10,7,22,.42); text-decoration:none; }
 .about-link-card small { color:var(--muted); line-height:1.4; }
+
+/* Independent accessory/sticker editor */
+.accessory-selector{margin-bottom:12px}
+.accessory-editor{display:grid;gap:16px;padding:14px;border:1px solid rgba(157,123,255,.30);border-radius:18px;background:rgba(12,9,27,.42)}
+.accessory-editor-top{display:flex;align-items:center;gap:12px;min-width:0}
+.accessory-editor-preview{width:68px;height:68px;flex:0 0 68px;object-fit:contain;padding:7px;border:1px solid rgba(157,123,255,.30);border-radius:14px;background-color:#11151b;background-image:linear-gradient(45deg,#262238 25%,transparent 25%),linear-gradient(-45deg,#262238 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#262238 75%),linear-gradient(-45deg,transparent 75%,#262238 75%);background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0}
+.accessory-editor-heading{display:grid;gap:5px;min-width:0}
+.accessory-editor-heading strong{font-size:13px}
+.accessory-editor-heading small{color:var(--muted);font-size:10px;line-height:1.45}
+.accessory-editor-controls{display:grid;gap:14px}
+.accessory-editor-control{display:grid;gap:8px;min-width:0}
+.accessory-editor-caption{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:11px}
+.accessory-editor-caption strong{color:var(--mint);font-variant-numeric:tabular-nums}
+.accessory-editor-control input[type=range]{width:100%;min-height:28px;accent-color:#c56bff;touch-action:pan-y}
+.accessory-editor-remove{justify-self:start}
+.stage-frame canvas{touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+.stage-frame canvas:active{cursor:grabbing}
+@media(max-width:620px){.accessory-editor{padding:12px}.accessory-editor-preview{width:60px;height:60px;flex-basis:60px}}
