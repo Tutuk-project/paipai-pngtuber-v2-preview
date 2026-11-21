@@ -63,3 +63,12 @@ test("accessory effects can be disabled independently", () => {
   assert.equal("shadowBlur" in ctx, false);
   assert.equal(calls.filter(call => call[0] === "drawImage").length, 1);
 });
+
+
+test("accessory rotation is applied independently around its own center", () => {
+  const { renderer, ctx, calls } = createRenderer([
+    { x: 0.5, y: 0.5, w: 0.2, h: 0.1, follow: false, rotation: 37 },
+  ]);
+  renderer.drawAccessories(ctx, 400, 400, 1000);
+  assert.ok(calls.some(call => call[0] === "rotate" && Math.abs(call[1] - (37 * Math.PI / 180)) < 1e-10));
+});
