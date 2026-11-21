@@ -172,7 +172,7 @@ test("GO Collaboration shared stage uses a dedicated landscape canvas", () => {
   const app = read("src/app.js");
   const stage = app.match(/function renderRoomParticipants\(\)[\s\S]*?function drawRoomStageFrame/)?.[0] || "";
   assert.match(stage, /const width = 1920/);
-  assert.match(stage, /const height = 1080/);
+  assert.match(stage, /const height = 1080/);\n  assert.match(stage, /aspect-ratio:16\\/9/);
   assert.match(stage, /16 \/ 9/);
   const overlay = read("src/overlay.js");
   assert.match(overlay, /isCollaborationRoom\s*=\s*roomPurpose === "collaboration"/);
@@ -205,7 +205,7 @@ test("generated OBS links do not enable visible overlay control buttons", () => 
   assert.ok(generator.length > 0);
   assert.ok(generator.includes("url.hash = new URLSearchParams"));
   assert.ok(!generator.includes('searchParams.set("controls"'));
-  assert.ok(generator.includes("Keep the generated OBS source clean"));
+  assert.ok(generator.includes("Keep the generated OBS source clean"));\n  assert.match(generator, /room\\.purpose === "collaboration"[\\s\\S]*?searchParams\\.set\\("controls", "1"\\)/);
 });
 
 test("overlay API returns room purpose for Solo or Collaboration rendering", () => {
@@ -239,12 +239,14 @@ test("renderer keeps a decoded fallback avatar visible when a state asset is una
   assert.match(renderer, /candidates\.find\(item => item\.complete && item\.naturalWidth\)/);
 });
 
-test("editor preview uses bounded backing resolution without changing saved stream dimensions", () => {
+test("editor preview stays square at 500x500 while OBS output dimensions remain profile-controlled", () => {
   const app = read("src/app.js");
   const preview = app.match(/function drawPreview\(\)[\s\S]*?function accessoryCanvasPoint/)?.[0] || "";
-  assert.match(preview, /720 \/ Math\.max\(width, height\)/);
-  assert.match(preview, /profilePreferences\.outputWidth/);
-  assert.match(preview, /profilePreferences\.outputHeight/);
+  assert.match(preview, /const previewWidth = 500/);
+  assert.match(preview, /const previewHeight = 500/);
+  assert.match(preview, /stageFrame\.style\.aspectRatio = "1 \/ 1"/);
+  assert.doesNotMatch(preview, /roomStage\.width = width/);
+  assert.match(app, /outputWidth: 500, outputHeight: 500/);
   assert.match(app, /now - lastRoomStageFrame >= 1000 \/ 30/);
 });
 
