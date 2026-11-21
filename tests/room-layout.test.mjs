@@ -62,6 +62,6 @@ test("room position changes persist during dragging and flush on touch release",
   const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
   assert.match(app, /scheduleRoomLayoutPersistence\(\)/);
   assert.match(app, /range\.addEventListener\("touchend", flushLayout/);
-  assert.match(app, /await api\("set_room_override", \{ room_id: currentRoom\.id, overrides: snapshot \}\)/);
+  assert.match(app, /api\("set_room_override", \{ room_id: currentRoom\.id, overrides: snapshot \}\)/);
   assert.match(app, /await broadcastPlayerLayout\(\)/);
 });

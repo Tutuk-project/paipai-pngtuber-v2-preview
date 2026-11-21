@@ -67,7 +67,7 @@ test("accessories are included in collaboration and OBS snapshots and rendered b
   assert.ok(edge.includes("vio_character_accessories(id,name,storage_path,bucket_id,x,y,w,h,mirror,follow_avatar,effects_enabled,sort_order)"));
   assert.ok(edge.includes("accessories: accessories.filter(Boolean)"));
   assert.ok(app.includes("avatarRenderer.setAccessories(characterAccessories)"));
-  assert.ok(overlay.includes("renderer.setAccessories(member.accessories || [])"));
+  assert.ok(overlay.includes("renderer.setAccessories(accessories)"));
   assert.ok(renderer.includes("item.follow !== false"));
 });
 
@@ -126,8 +126,8 @@ test("new Solo OBS rooms publish the current microphone state after Realtime sub
 });
 
 test("collaboration and OBS snapshots pass profile preferences and active-character assets to the shared renderer", () => {
-  const edge = read("supabase/functions/vio-api/index.ts");
-  const app = read("src/app.js");
+  assert.match(app, /entry\.renderer\.setPreferences\(profile\)/);
+  assert.match(overlay, /renderer\.setPreferences\(profile\)/);
   const overlay = read("src/overlay.js");
   for (const action of ["room_members", "overlay_connect"]) {
     const start = edge.indexOf('if (action === "' + action + '")');
@@ -233,7 +233,7 @@ test("Solo overlay accepts Creator Talking broadcasts as a fallback even when lo
 test("Solo OBS renders its animation directly into the visible stage canvas", () => {
   const overlay = read("src/overlay.js");
   assert.match(overlay, /drawDirectlyToStage = roomPurpose === "personal_overlay"/);
-  assert.match(overlay, /AvatarRenderer owns the visible canvas and its animation loop/);
+  assert.match(overlay, /if \(roomPurpose === "personal_overlay" && visible.length === 1/);
   assert.match(overlay, /drawCompositeFrame/);
 });
 
@@ -414,7 +414,7 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
   const overlay = read("src/overlay.js");
   const html = read("index.html");
   assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\.js\?v=/);
-  assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js\?v=/);
+  assert.match(app, /import \{ AvatarRenderer, resolveRoomAvatarPreferences \} from "\.\/avatar-renderer\.js\?v=/);
   assert.match(app, /function drawPreview\(\)/);
   assert.match(app, /async function generateOverlayLink\(/);
   assert.match(app, /async function enterRoom\(/);
@@ -488,7 +488,7 @@ test("dummy composition guide layers above participant backgrounds in Creator pr
 test("OBS Solo renderer applies complete member preferences before its direct render loop starts", () => {
   const overlay = read("src/overlay.js");
   const renderer = overlay.slice(overlay.indexOf("function ensurePlayerRenderer"), overlay.indexOf("function updateLocalMicState"));
-  assert.ok(renderer.indexOf("renderer.setPreferences(preferences)") < renderer.indexOf("renderer.start()"));
-  assert.ok(renderer.indexOf("renderer.setPreferences(preferences)") < renderer.indexOf("renderer.setAssets(member.assets"));
+  assert.ok(renderer.indexOf("renderer.setPreferences(profile)") < renderer.indexOf("renderer.start()"));
+  assert.ok(renderer.indexOf("renderer.setPreferences(profile)") < renderer.indexOf("renderer.setAssets(assets)"));
   assert.ok(renderer.includes("drawDirectlyToStage"));
 });
