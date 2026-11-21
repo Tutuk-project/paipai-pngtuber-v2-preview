@@ -249,7 +249,7 @@ test("editor preview stays square at 500x500 while OBS output dimensions remain 
   assert.match(preview, /stageFrame\.style\.aspectRatio = "1 \/ 1"/);
   assert.doesNotMatch(preview, /roomStage\.width = width/);
   assert.match(app, /outputWidth: 500, outputHeight: 500/);
-  assert.match(app, /profilePreferences = \\{ scale: 1, avatarScalePercent: 0, outputWidth: 500, outputHeight: 500/);
+  assert.ok(app.includes("profilePreferences = { scale: 1, avatarScalePercent: 0, outputWidth: 500, outputHeight: 500"));
   assert.match(app, /now - lastRoomStageFrame >= 1000 \/ 30/);
 });
 
