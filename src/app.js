@@ -1979,14 +1979,14 @@ function drawRoomStageFrame(now = performance.now()) {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const visible = roomMembers.slice(0, 4);
+    const showGrid = visible.some(member => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
+    const showCenter = visible.some(member => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
+    if (showCenter) drawRoomCenterGuide(ctx, canvas.width, canvas.height);
     visible.forEach(member => {
       const entry = roomPreviewRenderers.get(member.user_id);
       if (entry?.canvas) ctx.drawImage(entry.canvas, 0, 0, canvas.width, canvas.height);
     });
-    const showGrid = visible.some(member => member.overrides?.showGrid === true) || roomOverrides.showGrid === true;
-    const showCenter = visible.some(member => member.overrides?.showCenterGuide === true) || roomOverrides.showCenterGuide === true;
     if (showGrid) drawRoomCompositionGrid(ctx, canvas.width, canvas.height);
-    if (showCenter) drawRoomCenterGuide(ctx, canvas.width, canvas.height);
   }
   renderFrame = requestAnimationFrame(drawRoomStageFrame);
 }
