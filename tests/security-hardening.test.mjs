@@ -331,12 +331,44 @@ test("AudioEngine reduces mic detection latency without removing noise gating", 
 
 
 
-test("navigation keeps its original sidebar DOM placement", () => {
+test("navigation keeps its original sidebar DOM placement without reparenting controls", () => {
   const app = read("src/app.js");
+  const html = read("index.html");
   const css = read("assets/app.css");
-  assert.match(app, /const logoutButton = \$\("logoutButton"\);/);
-  assert.match(app, /\.querySelector\("\.sidebar-bottom"\)\.append\(logoutButton\)/);
+  const navigation = app.slice(app.indexOf("function renderNavigation()"), app.indexOf("function selectMenu("));
+  assert.match(navigation, /const nav = \$\("navigation"\);[\s\S]*if \(nav\)/);
+  assert.match(navigation, /if \(logoutButton\) logoutButton\.hidden = !currentUser/);
+  assert.doesNotMatch(navigation, /append\(logoutButton\)/);
+  assert.match(html, /<div class="sidebar-bottom">[\s\S]*?<button id="logoutButton"/);
   assert.doesNotMatch(app, /matchMedia\("\(max-width: 900px\)"\)/);
-  assert.doesNotMatch(app, /nav\.append\(logoutButton\)/);
   assert.doesNotMatch(css, /Mobile navigation refresh/);
 });
+
+test("editor view is revealed before optional navigation and settings rendering", () => {
+  const app = read("src/app.js");
+  const selectStart = app.indexOf("function selectMenu(");
+  const selectEnd = app.indexOf("function settingField(", selectStart);
+  const select = app.slice(selectStart, selectEnd);
+  const showEditor = select.indexOf('showView("editorView")');
+  const renderNavigation = select.indexOf("renderNavigation()");
+  assert.ok(showEditor >= 0, "selectMenu must reveal the editor view");
+  assert.ok(renderNavigation > showEditor, "the editor must be visible before navigation is rendered");
+
+  const loginStart = app.indexOf("async function login(");
+  const loginEnd = app.indexOf("async function loadCurrentProfile()", loginStart);
+  const login = app.slice(loginStart, loginEnd);
+  const selectProfile = login.indexOf('selectMenu("profile")');
+  const restoreRoom = login.indexOf("await restoreSavedRoom()");
+  assert.ok(selectProfile >= 0, "successful login must open the default profile view");
+  assert.ok(restoreRoom > selectProfile, "room restoration must happen after the editor is opened");
+  assert.doesNotMatch(login, /renderNavigation\(\);\s*selectMenu\("profile"\)/);
+});
+
+test("view switching tolerates missing optional DOM elements", () => {
+  const app = read("src/app.js");
+  const showViewStart = app.indexOf("function showView(");
+  const showViewEnd = app.indexOf("function allowedMenus(", showViewStart);
+  const showView = app.slice(showViewStart, showViewEnd);
+  assert.match(showView, /const view = \$\(viewId\);[\s\S]*if \(view\) view\.hidden/);
+  assert.match(showView, /if \(roomButton\) roomButton\.hidden/);
+});;
