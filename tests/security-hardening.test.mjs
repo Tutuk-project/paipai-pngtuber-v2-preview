@@ -273,15 +273,18 @@ test("Solo renderer publishes complete bounded frames without clearing visible O
   assert.doesNotMatch(renderer, /const rows = 48/);
 });
 
-test("Collaboration grid is persisted, broadcast, and rendered in preview and OBS", () => {
+test("Collaboration composition grid is a Creator preview guide and is excluded from OBS output", () => {
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");
   const backend = read("supabase/functions/vio-api/index.ts");
   assert.match(app, /roomCompositionGrid/);
   assert.match(app, /showGrid/);
   assert.match(app, /drawRoomCompositionGrid\(ctx, canvas\.width, canvas\.height\)/);
-  assert.match(overlay, /drawCompositionGrid\(ctx, canvas\.width, canvas\.height\)/);
   assert.match(backend, /"showGrid"/);
+  const overlayDraw = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
+  assert.doesNotMatch(overlayDraw, /drawCompositionGrid|drawCenterGuide/);
+  assert.match(overlayDraw, /ctx\.clearRect\(0, 0, canvas\.width, canvas\.height\)/);
+  assert.match(overlayDraw, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
 });
 
 
@@ -300,7 +303,7 @@ test("OBS overlay has no visible buttons or control panels in either mode", () =
   assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
 });
 
-test("Collaboration uses a single landscape stage with bold grid and center guide", () => {
+test("Collaboration keeps a 1920x1080 shared stage; composition guides stay in Creator preview only", () => {
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");
   const html = read("overlay.html");
@@ -309,7 +312,9 @@ test("Collaboration uses a single landscape stage with bold grid and center guid
   assert.match(app, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
   assert.match(overlay, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
   assert.match(app, /drawRoomCenterGuide\(ctx, canvas\.width, canvas\.height\)/);
-  assert.match(overlay, /drawCenterGuide\(ctx, canvas\.width, canvas\.height\)/);
+  assert.match(app, /drawRoomCompositionGrid\(ctx, canvas\.width, canvas\.height\)/);
+  const overlayDraw = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
+  assert.doesNotMatch(overlayDraw, /drawCenterGuide|drawCompositionGrid/);
   assert.match(app, /Math\.max\(18, Math\.round\(width \/ 100\)\)/);
   assert.match(backend, /"showCenterGuide"/);
   assert.match(html, /height:auto!important/);
@@ -388,14 +393,15 @@ test("view switching tolerates missing optional DOM elements", () => {
 });
 
 
-test("Creator Studio mobile dock has the requested six workspace tabs", () => {
+test("Creator Studio mobile dock has the requested five workspace tabs", () => {
   const html = read("index.html"); const app = read("src/app.js"); const css = read("assets/app.css");
   const dock = html.match(/<nav id="mobileBottomNav"[\s\S]*?<\/nav>/)?.[0] || "";
   const targets = [...dock.matchAll(/data-dock-target="([^"]+)"/g)].map(match => match[1]);
-  assert.deepEqual(targets, ["settings", "audio", "effects", "avatar", "accessories", "about"]);
-  assert.match(app, /case "settings":[\s\S]*?scrollIntoView/);
+  assert.deepEqual(targets, ["audio", "effects", "avatar", "accessories", "about"]);
+  assert.doesNotMatch(dock, /data-dock-target="settings"/);
+  assert.doesNotMatch(app, /case "settings":[\s\S]*?scrollIntoView/);
   for (const id of ["audio", "effects", "avatar", "accessories", "about"]) assert.ok(app.includes("case \"" + id + "\"") || app.includes("menuId === \"" + id + "\""));
-  assert.match(css, /grid-template-columns: repeat\(6, minmax\(0,1fr\)\)/);
+  assert.match(css, /grid-template-columns: repeat\(5, minmax\(0,1fr\)\)/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
   assert.match(css, /\.app-shell\.in-room \.mobile-bottom-nav\s*\{\s*display: none !important/);
@@ -421,15 +427,12 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
 });
 
 
-test("Collaboration OBS uses black only while guide layers are enabled, otherwise transparent", () => {
+test("Collaboration OBS output stays transparent and never renders editor-only guide layers", () => {
   const overlay = read("src/overlay.js");
   const draw = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
-  assert.match(draw, /const isCollaboration = roomPurpose === "collaboration"/);
-  assert.match(draw, /if \(showCenter \|\| showGrid\)/);
-  assert.match(draw, /ctx\.fillStyle = "#000000"/);
   assert.match(draw, /ctx\.clearRect\(0, 0, canvas\.width, canvas\.height\)/);
-  assert.match(draw, /if \(showCenter\) drawCenterGuide/);
-  assert.match(draw, /if \(showGrid\) drawCompositionGrid/);
+  assert.match(draw, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
+  assert.doesNotMatch(draw, /fillStyle = "#000000"|drawCenterGuide|drawCompositionGrid/);
 });
 
 test("AvatarRenderer preserves the last decoded PNG while a new expression is loading", () => {
@@ -469,15 +472,15 @@ test("room override writes merge partial updates with previously saved personal 
   assert.match(handler, /overrides: mergedOverrides/);
 });
 
-test("dummy composition guide is layered above opaque participant backgrounds in preview and OBS", () => {
+test("dummy composition guide layers above participant backgrounds in Creator preview and stays out of OBS", () => {
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");
   const appDraw = app.slice(app.indexOf("function drawRoomStageFrame"), app.indexOf("async function leaveRoom"));
   const overlayDraw = overlay.slice(overlay.indexOf("function drawCompositeFrame"), overlay.indexOf("function render()"));
   assert.ok(appDraw.indexOf("ctx.drawImage(entry.canvas") < appDraw.indexOf("drawRoomCenterGuide(ctx"));
-  assert.ok(overlayDraw.indexOf("ctx.drawImage(entry.canvas") < overlayDraw.indexOf("drawCenterGuide(ctx"));
   assert.ok(appDraw.indexOf("drawRoomCenterGuide(ctx") < appDraw.indexOf("drawRoomCompositionGrid(ctx"));
-  assert.ok(overlayDraw.indexOf("drawCenterGuide(ctx") < overlayDraw.indexOf("drawCompositionGrid(ctx"));
+  assert.doesNotMatch(overlayDraw, /drawCenterGuide|drawCompositionGrid/);
+  assert.match(overlayDraw, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
 });
 
 test("OBS Solo renderer applies complete member preferences before its direct render loop starts", () => {
