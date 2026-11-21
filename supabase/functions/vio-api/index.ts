@@ -1151,7 +1151,7 @@ Deno.serve(async (req) => {
       for (const key of allowed) {
         if (!Object.hasOwn(overrides, key)) continue;
         if (key === "showGrid" || key === "showCenterGuide") {
-          if (typeof overrides[key] !== "boolean") return json({ ok: false, error: "showGrid must be a boolean." }, 400);
+          if (typeof overrides[key] !== "boolean") return json({ ok: false, error: "Composition guide flags must be booleans." }, 400);
           clean[key] = overrides[key];
           continue;
         }
