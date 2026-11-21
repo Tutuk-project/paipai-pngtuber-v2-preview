@@ -316,3 +316,13 @@ test("clean OBS link stays menu-free while a separate control-enabled link is av
   const generator = app.slice(generatorStart, generatorEnd);
   assert.doesNotMatch(generator, /searchParams\.set\("controls"/);
 });
+
+
+test("AudioEngine reduces mic detection latency without removing noise gating", () => {
+  const audio = read("src/audio-engine.js");
+  assert.match(audio, /this\.analyser\.fftSize = 1024/);
+  assert.match(audio, /hangoverMs: 140/);
+  assert.match(audio, /this\.level = this\.level \* 0\.45 \+ rms \* 0\.55/);
+  assert.match(audio, /this\.noiseFloor \* this\.options\.noiseMultiplier/);
+  assert.match(audio, /now - this\.lastEmit\) > 25/);
+});
