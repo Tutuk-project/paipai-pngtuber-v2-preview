@@ -205,10 +205,10 @@ test("generated OBS links keep Solo clean and expose controls for Collaboration"
   const end = app.indexOf("async function loadAdminOverview", start);
   const generator = app.slice(start, end);
   assert.ok(generator.includes("url.hash = new URLSearchParams"));
-  assert.ok(!generator.includes('searchParams.set("controls", "1")'));
-  assert.ok(generator.includes('room.purpose === "collaboration"'));
-  assert.ok(generator.includes('url.searchParams.set("controls", "1")'));
+  assert.ok(generator.includes('if (room.purpose === "collaboration") url.searchParams.set("controls", "1")'));
+  assert.ok(generator.includes('$("copyOverlayControlsLink").hidden = room.purpose !== "collaboration"'));
 });
+
 
 test("overlay API returns room purpose for Solo or Collaboration rendering", () => {
   const edge = read("supabase/functions/vio-api/index.ts");
@@ -248,7 +248,7 @@ test("editor preview stays square at 500x500 while OBS output dimensions remain 
   assert.match(preview, /const previewHeight = 500/);
   assert.match(preview, /stageFrame\.style\.aspectRatio = "1 \/ 1"/);
   assert.doesNotMatch(preview, /roomStage\.width = width/);
-  assert.match(app, /outputWidth: 500, outputHeight: 500/);
+  assert.match(app, /outputWidth: 500, outputHeight: 500/);\n  assert.match(app, /profilePreferences = \\{ scale: 1, avatarScalePercent: 0, outputWidth: 500, outputHeight: 500/);
   assert.match(app, /now - lastRoomStageFrame >= 1000 \/ 30/);
 });
 
