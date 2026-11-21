@@ -148,7 +148,8 @@ function focusSettingsSection(sectionId) {
 function selectMobileDock(target) {
   switch (target) {
     case "stage":
-      selectMenu("profile");
+      if ($("adminView") && !$("adminView").hidden) selectMenu("profile", "stage");
+      document.querySelector(".preview-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
       updateMobileDock("stage");
       break;
     case "background":
@@ -166,7 +167,7 @@ function selectMobileDock(target) {
       focusSettingsSection("makeupSettingsAccordion");
       break;
     case "profile":
-      selectMenu("character");
+      selectMenu("profile", "profile");
       updateMobileDock("profile");
       break;
     default:
@@ -174,7 +175,7 @@ function selectMobileDock(target) {
   }
 }
 
-function selectMenu(menuId) {
+function selectMenu(menuId, dockTarget = null) {
   if (menuId === "collaboration") {
     openRoomChooser();
     return;
@@ -185,8 +186,8 @@ function selectMenu(menuId) {
   closeMobileMenu();
   activeMenu = menuId;
   const meta = menus.find(item => item.id === menuId);
-  if (menuId === "profile") updateMobileDock("stage");
-  else if (menuId === "character") updateMobileDock("profile");
+  if (dockTarget) updateMobileDock(dockTarget);
+  else if (menuId === "profile") updateMobileDock("stage");
   else if (menuId === "audio") updateMobileDock("audio");
   else if (menuId === "effects") updateMobileDock("effects");
   else updateMobileDock("");
