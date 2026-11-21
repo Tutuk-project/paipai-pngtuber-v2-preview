@@ -177,3 +177,29 @@ Record the actual target app, browser/device, room participant count, URL unchan
 5. Add tests for shared URL semantics and per-member transform isolation.
 6. Re-run CI and Pages deployment.
 7. Complete the Android Chrome and target Browser Source acceptance test before closing the OBS issue.
+
+
+## 7. Implementation update — 2026-11-21
+
+The accessory editor repair has now been implemented in the v2 preview source:
+
+- Declared the pointer-drag state explicitly. The previous handler assigned to `accessoryDragState` without a module-level declaration; ES modules run in strict mode, so the first successful accessory pointer-down could throw a `ReferenceError`.
+- Removed the old behavior that treated any tap elsewhere on the canvas as a drag of the currently selected accessory. A drag now starts only when the pointer hits an accessory's rendered bounds.
+- Added rotated bounding-box hit testing that accounts for avatar-follow transform and each accessory's own rotation.
+- Replaced the accessory card/stepper-only workspace with an accessory dropdown and a selected-item editor.
+- Added independent Scale, Rotation, Position X and Position Y controls.
+- Added pointer capture, touch-action handling, and a safe finish path for pointer-up, pointer-cancel and lost pointer capture.
+- Accessory transforms are persisted per accessory; they do not modify the avatar's profile scale or Collaboration room layout.
+- The shared renderer applies accessory rotation around the accessory center.
+- Added migration `010_accessory_rotation.sql`; Development database migration history confirms it is applied and `rotation` exists as a non-null double precision column defaulting to 0, constrained to -180..180.
+- Updated `vio-api` to accept, validate, and return rotation for editor assets, Collaboration room snapshots, and OBS overlay snapshots. Development Edge Function is ACTIVE at version 17 with JWT verification enabled.
+- Updated app/CSS cache versions and added renderer/source regression coverage.
+
+### Validation boundary
+
+- Supabase Development schema: verified by a read-only query; the `rotation` column exists with default 0 and is non-null.
+- Supabase Development Edge Function: `vio-api` v17 ACTIVE, `verify_jwt=true`.
+- GitHub Pages preview validation: latest observed run passed on commit `9870a7007f2cb8ee8f9ae12f5bd5719e6e13a201`.
+- GitHub Validate Vio Studio and latest Pages deployment workflow are still being rechecked after the final regression-test adjustment.
+- Actual POCO X7 Pro touch-drag, persistence-after-refresh, and rendered result verification remains required. Do not call the issue fully closed until those checks pass.
+- Supabase Live, Offline v1.7 RELEASE, and Online v1.0 were not modified.
