@@ -1314,6 +1314,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, room_id: roomId, overlay_token: token });
     }
 
+    if (action === "overlay_poll") {
+      const roomId = String(body.room_id || "");
+      const token = String(body.overlay_token || "");
+      if (!roomId || token.length < 20) return json({ ok: false, error: "Overlay credentials are invalid." }, 400);
+      const { data: room, error: roomError } = await db.from("vio_rooms")
+        .select("id,status,purpose,overlay_token_hash,expires_at").eq("id", roomId).maybeSingle();
+      if (roomError) throw roomError;
+      if (!room || room.status !== "active" || new Date(room.expires_at).getTime() <= Date.now() || room.overlay_token_hash !== await sha256(token)) {
+        return json({ ok: false, error: "Overlay link is invalid or room is closed or expired." }, 403);
+      }
+      const { data: rows, error: memberError } = await db.from("vio_room_members")
+        .select("user_id,state,vio_room_overrides(overrides)").eq("room_id", roomId);
+      if (memberError) throw memberError;
+      return json({ ok: true, members: (rows || []).map((member: any) => ({
+        user_id: member.user_id, state: member.state || "idle",
+        overrides: member.vio_room_overrides?.[0]?.overrides || {}
+      })) });
+    }
+
     if (action === "overlay_connect") {
       const roomId = String(body.room_id || "");
       const token = String(body.overlay_token || "");
