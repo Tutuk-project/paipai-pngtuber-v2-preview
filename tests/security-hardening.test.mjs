@@ -386,7 +386,7 @@ test("Creator Studio mobile dock is present and connected to real workspace sect
   assert.match(app, /case "background":[\s\S]*selectMenu\("effects"\)[\s\S]*focusSettingsSection\("backgroundSettingsAccordion"\)/);
   assert.match(app, /case "audio":[\s\S]*selectMenu\("audio"\)/);
   assert.match(app, /case "effects":[\s\S]*focusSettingsSection\("makeupSettingsAccordion"\)/);
-  assert.match(app, /case "profile":[\s\S]*selectMenu\("character"\)/);
+  assert.match(app, /case "profile":[\s\S]*selectMenu\("profile", "profile"\)/));
   assert.match(app, /bgGroup\.details\.id = "backgroundSettingsAccordion"/);
   assert.match(app, /makeup\.details\.id = "makeupSettingsAccordion"/);
   assert.match(css, /@media \(max-width: 760px\)/);
