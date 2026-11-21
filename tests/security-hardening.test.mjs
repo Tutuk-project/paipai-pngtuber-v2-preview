@@ -331,3 +331,19 @@ test("AudioEngine reduces mic detection latency without removing noise gating", 
   assert.match(audio, /this\.noiseFloor \* this\.options\.noiseMultiplier/);
   assert.match(audio, /now - this\.lastEmit\) > 25/);
 });
+
+
+test("mobile navigation moves to a labeled bottom dock without replacing Vio branding or menu icons", () => {
+  const app = read("src/app.js");
+  const css = read("assets/app.css");
+  const html = read("index.html");
+  assert.match(html, /class="sidebar-brand"/);
+  assert.match(html, /class="brand-mark"/);
+  assert.match(app, /window\.matchMedia\("\(max-width: 900px\)"\)/);
+  assert.match(app, /nav\.append\(logoutButton\)/);
+  assert.match(css, /@media\(max-width:900px\)/);
+  assert.match(css, /\.sidebar \.nav-icon\{display:block!important/);
+  assert.match(css, /\.sidebar \.nav-label\{display:block!important/);
+  assert.match(css, /\.sidebar-brand\{/);
+  assert.match(css, /safe-area-inset-bottom/);
+});
