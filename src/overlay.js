@@ -380,6 +380,12 @@ async function refreshMembers() {
   const result = await api("overlay_connect", { room_id: roomId, overlay_token: overlayToken });
   roomPurpose = result.room?.purpose || roomPurpose;
   members = roomPurpose === "collaboration" ? sortRoomMembers(result.members || []) : (result.members || []);
+  if (roomPurpose === "collaboration") {
+    const presentIds = new Set(Object.keys(channel?.presenceState?.() || {}));
+    for (const member of members) {
+      if (!presentIds.has(member.user_id)) member.state = "idle";
+    }
+  }
   const hostMember = members.find(member => member.is_host) || members[0];
   if (roomPurpose === "collaboration") {
     const hostBackground = members.find(member => member.is_host)?.preferences?.background || { mode: "transparent" };
