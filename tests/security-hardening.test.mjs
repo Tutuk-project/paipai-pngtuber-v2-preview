@@ -273,7 +273,7 @@ test("Collaboration grid is persisted, broadcast, and rendered in preview and OB
 test("OBS overlay keeps working when Realtime channel subscription fails", () => {
   const overlay = read("src/overlay.js");
   assert.match(overlay, /Realtime unavailable; using polling fallback/);
-  assert.match(overlay, /realtimeConnected \? 15000 : 2500/);
+  assert.match(overlay, /realtimeConnected \? 10000 : 4000/);
   assert.doesNotMatch(overlay, /reject\(new Error\(\`Realtime channel error/);
 });
 
