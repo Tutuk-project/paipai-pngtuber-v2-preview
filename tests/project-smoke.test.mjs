@@ -85,9 +85,9 @@ test("Admin account creation is a single database transaction", () => {
 test("Solo OBS URL resolves from the deployed page root and overlay errors remain visible", () => {
   const app = read("src/app.js");
   const overlayPage = read("overlay.html");
-  assert.match(app, /new URL\\("overlay\\.html", document\\.baseURI\\)/);
-  assert.doesNotMatch(app, /new URL\\("\.\\.\\/overlay\\.html", import\\.meta\\.url\\)/);
-  assert.match(overlayPage, /\\.status\\.is-visible\\{display:block\\}/);
+  assert.match(app, /new URL\("overlay\.html", document\.baseURI\)/);
+  assert.doesNotMatch(app, /new URL\("\.\.\/overlay\.html", import\.meta\.url\)/);
+  assert.match(overlayPage, /\.status\.is-visible\{display:block\}/);
 });
 
 test("collaboration preview and OBS overlay both render per-member accessories", () => {
