@@ -121,3 +121,14 @@ test("Creator local collaboration rendering reads the same DB override object as
   assert.match(block, /const overrides = member\.overrides \|\| \{\}/);
   assert.doesNotMatch(block, /\.\.\.roomOverrides/);
 });
+
+
+test("presence loss idles a collaboration member without deleting membership", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+  const overlay = await readFile(new URL("../src/overlay.js", import.meta.url), "utf8");
+  assert.match(app, /remotePlayerStates\.set\(member\.user_id, "idle"\)/);
+  assert.match(app, /loadRoomMembers\(\);/);
+  assert.match(overlay, /if \(!presentIds\.has\(member\.user_id\)\) member\.state = "idle"/);
+  assert.doesNotMatch(app, /presenceState\(\)[\s\S]{0,240}roomMembers\.filter/);
+});
