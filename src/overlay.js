@@ -30,6 +30,7 @@ let gridEnabled = params.get("grid") === "1";
 let gridUserOverride = false;
 let centerGuideUserOverride = false;
 let realtimeConnected = false;
+let pollEndpointSupported = null;
 
 function setStatus(message, error = false, forceVisible = true) {
   if (!statusEl) return;
@@ -259,7 +260,20 @@ function render() {
 }
 
 async function pollOverlayState() {
-  const result = await api("overlay_poll", { room_id: roomId, overlay_token: overlayToken });
+  let result;
+  if (pollEndpointSupported !== false) {
+    try {
+      result = await api("overlay_poll", { room_id: roomId, overlay_token: overlayToken });
+      pollEndpointSupported = true;
+    } catch (error) {
+      if (!String(error?.message || error).includes("Unknown action: overlay_poll")) throw error;
+      pollEndpointSupported = false;
+    }
+  }
+  // Older deployed Edge Functions do not yet expose overlay_poll. Reuse their
+  // existing signed snapshot endpoint but only apply state/layout fields here,
+  // never reassign signed image URLs on every fallback tick.
+  if (pollEndpointSupported === false) result = await api("overlay_connect", { room_id: roomId, overlay_token: overlayToken });
   const incoming = result.members || [];
   const currentIds = members.map(member => member.user_id).sort().join("|");
   const nextIds = incoming.map(member => member.user_id).sort().join("|");
@@ -414,7 +428,7 @@ async function boot() {
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
       pollOverlayState().catch(error => { if (debugMode) setStatus("Polling overlay gagal: " + error.message, true); });
-    }, realtimeConnected ? 5000 : 2500);
+    }, realtimeConnected ? 10000 : 4000);
     if (assetRefreshTimer) clearInterval(assetRefreshTimer);
     assetRefreshTimer = setInterval(() => {
       refreshMembers().catch(error => { if (debugMode) setStatus("Refresh aset overlay gagal: " + error.message, true); });
