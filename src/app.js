@@ -1931,7 +1931,16 @@ async function subscribeRoom(roomId) {
     })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
-      $("participantCount").textContent = `${Object.keys(state).length} / ${currentRoom.capacity} connected`;
+      const presentIds = new Set(Object.keys(state));
+      $("participantCount").textContent = `${presentIds.size} / ${currentRoom.capacity} connected`;
+      // A missed presence heartbeat changes the member to idle, never removes
+      // the DB-backed room membership or its renderer identity.
+      for (const member of roomMembers) {
+        if (!presentIds.has(member.user_id)) {
+          remotePlayerStates.set(member.user_id, "idle");
+          member.state = "idle";
+        }
+      }
       // Existing participants must refresh profile assets when a new user joins/leaves.
       loadRoomMembers();
     });
