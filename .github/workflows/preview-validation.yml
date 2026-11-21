@@ -1,19 +1,22 @@
 name: Preview validation
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Validate Vio Studio"]
+    types: [completed]
     branches: [main]
-  pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   syntax:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -42,3 +45,11 @@ jobs:
           grep -q '.app-shell.in-room .room-actions' assets/app.css
           grep -q '.room-controls-layout' assets/app.css
           ! grep -q 'id="obs"' src/app.js
+  fail-closed:
+    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Block preview validation after failed primary validation
+        run: |
+          echo "Validate Vio Studio failed; preview validation is blocked."
+          exit 1
