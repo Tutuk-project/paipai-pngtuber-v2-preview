@@ -90,6 +90,22 @@ test("Solo OBS URL resolves from the deployed page root and overlay errors remai
   assert.match(overlayPage, /\.status\.is-visible\{display:block\}/);
 });
 
+test("Solo OBS URL uses WebView-compatible query credentials and consumes them after boot", () => {
+  const app = read("src/app.js");
+  const overlay = read("src/overlay.js");
+  const overlayPage = read("overlay.html");
+  assert.match(app, /url\.searchParams\.set\("room", result\.room_id\)/);
+  assert.match(app, /url\.searchParams\.set\("token", result\.overlay_token\)/);
+  assert.doesNotMatch(app, /url\.hash\s*=\s*new URLSearchParams/);
+  assert.match(overlay, /pageUrl\.searchParams\.get\("room"\) \|\| linkParams\.get\("room"\)/);
+  assert.match(overlay, /pageUrl\.searchParams\.get\("token"\) \|\| linkParams\.get\("token"\)/);
+  assert.match(overlay, /cleanParams\.delete\("room"\)/);
+  assert.match(overlay, /cleanParams\.delete\("token"\)/);
+  assert.match(overlay, /history\.replaceState\(window\.history\.state, "", cleanUrl\)/);
+  assert.match(overlay, /linkParams\.get\("room"\)/);
+  assert.match(overlayPage, /20261121-prism-ios-query-1/);
+});
+
 test("collaboration preview and OBS overlay both render per-member accessories", () => {
   const app = read("src/app.js");
   const overlay = read("src/overlay.js");

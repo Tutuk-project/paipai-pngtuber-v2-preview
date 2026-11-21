@@ -30,7 +30,7 @@ let centerGuideEnabled = params.get("centerGuide") === "1";
 let gridEnabled = params.get("grid") === "1";
 let realtimeConnected = false;
 let pollEndpointSupported = null;
-const BUILD_ID = "OBS-HUD-2026-11-21-r2";
+const BUILD_ID = "OBS-HUD-2026-11-21-r3";
 let debugHud = null;
 let debugHudTimer = 0;
 let realtimeStatus = "NOT_CONNECTED";
@@ -463,9 +463,26 @@ async function boot() {
     }
     const pageUrl = new URL(location.href);
     const linkParams = new URLSearchParams(pageUrl.hash.replace(/^#/, ""));
-    roomId = linkParams.get("room") || pageUrl.searchParams.get("room");
-    overlayToken = linkParams.get("token") || pageUrl.searchParams.get("token");
+    roomId = pageUrl.searchParams.get("room") || linkParams.get("room");
+    overlayToken = pageUrl.searchParams.get("token") || linkParams.get("token");
     if (!roomId || !overlayToken) throw new Error("URL overlay tidak lengkap. Buat ulang link dari tombol Generate OBS Link.");
+
+    // Consume link credentials immediately. Keep non-secret output/debug parameters,
+    // but remove room/token from the visible URL and subsequent navigation/referrers.
+    // Query credentials are sent with the initial static-page request; this only
+    // shortens their lifetime in browser history and page-to-page navigation.
+    const cleanParams = new URLSearchParams(pageUrl.searchParams);
+    cleanParams.delete("room");
+    cleanParams.delete("token");
+    params.delete("room");
+    params.delete("token");
+    const cleanQuery = cleanParams.toString();
+    const cleanUrl = pageUrl.pathname + (cleanQuery ? `?${cleanQuery}` : "");
+    try {
+      window.history.replaceState(window.history.state, "", cleanUrl);
+    } catch (error) {
+      console.warn("Overlay credentials could not be removed from the visible URL:", error);
+    }
 
     setStatus("Menghubungkan ke layanan overlay…");
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
