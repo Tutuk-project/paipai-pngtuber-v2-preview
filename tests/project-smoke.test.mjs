@@ -350,7 +350,7 @@ test("private background media upload is owner-scoped and signed for editor, col
   assert.ok(renderer.includes('this.setBackgroundVideo(background.src || null)'));
   assert.ok(renderer.includes('this.setBackgroundImage(background.mode === "image" ? background.src || null : null)'));
   assert.ok(overlay.includes("renderer.setPreferences(profile)"));
-  assert.ok(app.includes("entry.renderer.setBackgroundImage(background.mode === \"image\" ? background.src : null)"));
+  assert.ok(app.includes("entry.renderer.setPreferences(profile)"));
 });
 
 test("all v2 accessory, background and cleanup dependencies have ordered migrations", () => {

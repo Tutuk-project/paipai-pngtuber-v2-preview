@@ -126,8 +126,8 @@ test("new Solo OBS rooms publish the current microphone state after Realtime sub
 });
 
 test("collaboration and OBS snapshots pass profile preferences and active-character assets to the shared renderer", () => {
-  assert.match(app, /entry\.renderer\.setPreferences\(profile\)/);
-  assert.match(overlay, /renderer\.setPreferences\(profile\)/);
+  const edge = read("supabase/functions/vio-api/index.ts");
+  const app = read("src/app.js");
   const overlay = read("src/overlay.js");
   for (const action of ["room_members", "overlay_connect"]) {
     const start = edge.indexOf('if (action === "' + action + '")');
@@ -137,8 +137,12 @@ test("collaboration and OBS snapshots pass profile preferences and active-charac
     assert.match(handler, /preferences/);
     assert.match(handler, /vio_character_assets/);
   }
-  assert.match(app, /entry\.renderer\.setPreferences\(preferences\)/);
-  assert.match(overlay, /renderer\.setPreferences\(preferences\)/);
+  assert.match(app, /entry\.renderer\.setPreferences\(profile\)/);
+  assert.match(app, /entry\.renderer\.setAssets\(assets\)/);
+  assert.match(app, /entry\.renderer\.setAccessories\(accessories\)/);
+  assert.match(overlay, /renderer\.setPreferences\(profile\)/);
+  assert.match(overlay, /renderer\.setAssets\(assets\)/);
+  assert.match(overlay, /renderer\.setAccessories\(accessories\)/);
 });
 
 
