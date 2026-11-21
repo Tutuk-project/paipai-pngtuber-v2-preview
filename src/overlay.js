@@ -75,12 +75,39 @@ function renderDebugHud() {
     };
   });
   const pollMembers = lastPollResult?.members || [];
+  const renderList = members.slice(0, 4).map((member, index) => {
+    const entry = playerRenderers.get(member.user_id);
+    const assets = Object.entries(member.assets || {}).map(([expression, src]) => {
+      const image = entry?.renderer?.images?.get(src);
+      const timing = performance.getEntriesByName(src).slice(-1)[0];
+      let signedExp = null;
+      try {
+        const token = new URL(src).searchParams.get("token");
+        if (token) signedExp = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/") + "==")).exp || null;
+      } catch {}
+      return {
+        expression, image_state: image?.__vioLoadState || (image === null ? "error" : image ? "loading/unknown" : "not-requested"),
+        naturalWidth: image?.naturalWidth || 0, naturalHeight: image?.naturalHeight || 0,
+        complete: image?.complete ?? false, error_at: image?.__vioErrorAt || null,
+        responseStatus: timing?.responseStatus || "not exposed",
+        signed_exp: signedExp ? new Date(signedExp * 1000).toISOString() : null,
+        src_key: String(src).split("?")[0].slice(-100)
+      };
+    });
+    return { slot: index, member_id: member.user_id, username: member.username, renderer_exists: !!entry,
+      asset_count: Object.keys(member.assets || {}).length, assets };
+  });
+  const rendererIds = [...playerRenderers.keys()];
   debugHud.textContent = [
     "VIO OBS DEBUG HUD · " + BUILD_ID + " · module=" + (new URL(import.meta.url).searchParams.get("v") || "unversioned"),
     "Realtime: " + realtimeStatus + (realtimeLastError ? " · " + realtimeLastError : ""),
-    "Last broadcast: " + (lastBroadcastReceived ? JSON.stringify(lastBroadcastReceived) : "none"),
-    "Last poll: " + (lastPollResult ? JSON.stringify({ at: debugTime(lastPollResult.at), http_status: lastPollResult.httpStatus, error: lastPollResult.error, members: pollMembers }) : "none"),
-    "Members actually drawn / applied seq: " + JSON.stringify(membersView),
+    "Member list (" + members.length + "): " + JSON.stringify(members.map(m => ({ id: m.user_id, username: m.username, state: m.state }))),
+    "Render list (max 4): " + JSON.stringify(renderList),
+    "Renderer map IDs: " + JSON.stringify(rendererIds),
+    "Last broadcast source event: " + (lastBroadcastReceived ? JSON.stringify(lastBroadcastReceived) : "none"),
+    "Last poll source event: " + (lastPollResult ? JSON.stringify({ at: debugTime(lastPollResult.at), http_status: lastPollResult.httpStatus, error: lastPollResult.error, members: pollMembers }) : "none"),
+    "Member effective layout: " + JSON.stringify(membersView),
+    "Asset refresh cadence: 15m · signed URL requested TTL: 60m",
     "rAF: " + rafFps + " ticks/s · alive=" + (Date.now() - rafLastTickAt < 2500),
     "Storage: " + JSON.stringify(storageStatus),
     "Auth: session=" + authSessionStatus + " · refresh=" + authRefreshStatus
@@ -335,6 +362,7 @@ async function pollOverlayState() {
     }
     const nextOverrides = item.overrides || {};
     member.overrides_updated_at = item.overrides_updated_at || item.updated_at || member.overrides_updated_at || null;
+    member._debugLastLayoutSource = { source: "poll", at: Date.now(), version: item.version || item.updated_at || item.overrides_updated_at || null };
     if (JSON.stringify(member.overrides || {}) !== JSON.stringify(nextOverrides)) {
       member.overrides = nextOverrides;
       member.overrides_updated_at = item.updated_at || null;
@@ -468,12 +496,14 @@ async function boot() {
         lastBroadcastReceived = {
           at: Date.now(), member_id: payload.user_id, seq,
           x: payload.overrides.x, y: payload.overrides.y, scale: payload.overrides.scale,
+          updated_at: payload.updated_at || null, version: payload.version || payload.updated_at || null,
           applied: !!member && !stale,
           reason: !member ? "member_id_not_found" : stale ? "stale_seq" : "applied"
         };
         if (stale) { renderDebugHud(); return; }
         if (seq) layoutSequences.set(payload.user_id, seq);
         if (member) {
+          member._debugLastLayoutSource = { source: "broadcast", at: Date.now(), version: payload.version || payload.updated_at || null };
           member.overrides = { ...(member.overrides || {}), ...payload.overrides };
           render();
         }
