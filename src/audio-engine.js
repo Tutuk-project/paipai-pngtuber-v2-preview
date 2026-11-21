@@ -11,8 +11,8 @@ export class AudioEngine extends EventTarget {
       sensitivity: 1,
       minThreshold: 0.010,
       noiseMultiplier: 3.2,
-      hangoverMs: 190,
-      calibrationMs: 1100,
+      hangoverMs: 140,
+      calibrationMs: 650,
       preferredAutoGainControl: true,
       preferredNoiseSuppression: true,
       preferredEchoCancellation: true,
@@ -114,7 +114,7 @@ export class AudioEngine extends EventTarget {
       this.source = this.context.createMediaStreamSource(stream);
       this.gain = this.context.createGain();
       this.analyser = this.context.createAnalyser();
-      this.analyser.fftSize = 2048;
+      this.analyser.fftSize = 1024;
       this.analyser.smoothingTimeConstant = 0;
       this.samples = new Float32Array(this.analyser.fftSize);
       this.gain.gain.setValueAtTime(this.#gainValue(), this.context.currentTime);
@@ -166,7 +166,7 @@ export class AudioEngine extends EventTarget {
     let sum = 0;
     for (const sample of this.samples) sum += sample * sample;
     const rms = Math.sqrt(sum / this.samples.length);
-    this.level = this.level * 0.62 + rms * 0.38;
+    this.level = this.level * 0.45 + rms * 0.55;
     const now = performance.now();
     const calibrating = now < this.calibrationUntil;
     const adaptationCeiling = Math.max(this.options.minThreshold * 1.7, this.noiseFloor * 3.2);
@@ -189,7 +189,7 @@ export class AudioEngine extends EventTarget {
     }
     this.dispatchEvent(new CustomEvent("meter", { detail: { level: this.level, threshold, noiseFloor: this.noiseFloor, calibrating } }));
     const state = this.speaking ? "talking" : "idle";
-    if (state !== this.state && (now - this.lastEmit) > 45) {
+    if (state !== this.state && (now - this.lastEmit) > 25) {
       this.state = state;
       this.lastEmit = now;
       this.dispatchEvent(new CustomEvent("state", { detail: { state, at: Date.now(), level: this.level, threshold } }));
