@@ -12,6 +12,7 @@ let localMicUserId = null;
 let localMicActive = false;
 let members = [];
 let refreshTimer = 0;
+let assetRefreshTimer = 0;
 let compositeRaf = 0;
 let lastCompositeFrame = 0;
 const states = new Map();
@@ -257,6 +258,30 @@ function render() {
   if (!compositeRaf) compositeRaf = requestAnimationFrame(drawCompositeFrame);
 }
 
+async function pollOverlayState() {
+  const result = await api("overlay_poll", { room_id: roomId, overlay_token: overlayToken });
+  const incoming = result.members || [];
+  const currentIds = members.map(member => member.user_id).sort().join("|");
+  const nextIds = incoming.map(member => member.user_id).sort().join("|");
+  if (currentIds !== nextIds) { await refreshMembers(); return; }
+  let layoutChanged = false;
+  for (const item of incoming) {
+    const member = members.find(entry => entry.user_id === item.user_id);
+    if (!member) continue;
+    if (!(localMicActive && item.user_id === localMicUserId) && ["idle", "talking"].includes(item.state)) {
+      states.set(item.user_id, item.state);
+      member.state = item.state;
+    }
+    const nextOverrides = item.overrides || {};
+    if (JSON.stringify(member.overrides || {}) !== JSON.stringify(nextOverrides)) {
+      member.overrides = nextOverrides;
+      ensurePlayerRenderer(member, canvas.width, members.indexOf(member));
+      layoutChanged = true;
+    }
+  }
+  if (layoutChanged || incoming.length) render();
+}
+
 async function refreshMembers() {
   const result = await api("overlay_connect", { room_id: roomId, overlay_token: overlayToken });
   roomPurpose = result.room?.purpose || roomPurpose;
@@ -388,8 +413,12 @@ async function boot() {
     // Mic is deliberately user-activated for Android WebView permission rules.
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(() => {
-      refreshMembers().catch(error => { if (debugMode) setStatus("Refresh overlay gagal: " + error.message, true); });
-    }, realtimeConnected ? 15000 : 2500);
+      pollOverlayState().catch(error => { if (debugMode) setStatus("Polling overlay gagal: " + error.message, true); });
+    }, realtimeConnected ? 5000 : 2500);
+    if (assetRefreshTimer) clearInterval(assetRefreshTimer);
+    assetRefreshTimer = setInterval(() => {
+      refreshMembers().catch(error => { if (debugMode) setStatus("Refresh aset overlay gagal: " + error.message, true); });
+    }, 15 * 60 * 1000);
   } catch (error) {
     console.error("Vio Studio OBS overlay error:", error);
     let message = error instanceof Error ? error.message : String(error);
@@ -410,6 +439,7 @@ boot();
 
 window.addEventListener("pagehide", () => {
   if (refreshTimer) clearInterval(refreshTimer);
+  if (assetRefreshTimer) clearInterval(assetRefreshTimer);
   if (compositeRaf) cancelAnimationFrame(compositeRaf);
   compositeRaf = 0;
   for (const entry of playerRenderers.values()) entry.renderer.stop();
