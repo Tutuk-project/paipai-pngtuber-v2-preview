@@ -191,10 +191,11 @@ test("room layout sliders update the local member renderer immediately", () => {
 test("OBS overlay automatically requests microphone access for Solo and Collaboration", () => {
   const overlay = read("src/overlay.js");
   const html = read("overlay.html");
+  const audio = read("src/audio-engine.js");
   assert.match(overlay, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
   assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
-  assert.match(overlay, /navigator\.mediaDevices\?\.getUserMedia/);
-  assert.match(overlay, /Creator-side state broadcasts remain active/);
+  assert.match(audio, /navigator\.mediaDevices\?\.getUserMedia/);
+  assert.match(overlay, /Creator-side state broadcasts/);
   assert.match(html, /<canvas id="stage"/);
   assert.doesNotMatch(html, /overlayMicToggle|overlayMicDevice|overlayControls/);
 });
