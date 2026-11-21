@@ -1,4 +1,4 @@
-import { AvatarRenderer, resolveRoomAvatarPreferences, sortRoomMembers } from "./avatar-renderer.js?v=20261121-collab-room-composite-1";
+import { AvatarRenderer, resolveRoomAvatarLayouts, resolveRoomAvatarPreferences, resolveRoomBackgroundPreferences, sortRoomMembers } from "./avatar-renderer.js?v=20261121-collab-room-composite-1";
 import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
 
 let config;
@@ -153,7 +153,7 @@ async function api(action, payload = {}) {
   return data;
 }
 
-function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0) {
+function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0, resolvedLayout = null) {
   let entry = playerRenderers.get(member.user_id);
   const drawDirectlyToStage = roomPurpose === "personal_overlay" && member.user_id === localMicUserId;
   if (entry && entry.direct !== drawDirectlyToStage) {
@@ -176,9 +176,9 @@ function ensurePlayerRenderer(member, stageWidth = canvas.width, memberIndex = 0
     playerCanvas.height = canvas.height;
   }
   const profile = member.preferences || {};
-  const spriteProfile = roomPurpose === "collaboration" ? { ...profile, background: { mode: "transparent" } } : profile;
+  const spriteProfile = resolvedLayout?.spriteProfile || (roomPurpose === "collaboration" ? { ...profile, background: { mode: "transparent" } } : profile);
   const overrides = member.overrides || {};
-  const preferences = resolveRoomAvatarPreferences(spriteProfile, overrides, width, canvas.height, memberIndex, members.length);
+  const preferences = resolvedLayout?.preferences || resolveRoomAvatarPreferences(spriteProfile, overrides, width, canvas.height, memberIndex, members.length);
   const profileKey = JSON.stringify(spriteProfile);
   const assets = member.assets || {};
   const assetsKey = JSON.stringify(assets);
@@ -317,7 +317,9 @@ function drawCompositeFrame(now) {
 
 function render() {
   if (!canvas || !ctx) return;
-  const visible = (roomPurpose === "collaboration" ? sortRoomMembers(members) : members).slice(0, 4);
+  const orderedMembers = roomPurpose === "collaboration" ? sortRoomMembers(members) : members;
+  const visible = orderedMembers.slice(0, 4);
+  const layouts = roomPurpose === "collaboration" ? resolveRoomAvatarLayouts(orderedMembers, canvas.width, canvas.height) : [];
   if (!visible.length) {
     if (compositeRaf) cancelAnimationFrame(compositeRaf);
     compositeRaf = 0;
@@ -325,7 +327,7 @@ function render() {
     return;
   }
   visible.forEach((member, index) => {
-    const entry = ensurePlayerRenderer(member, canvas.width, index);
+    const entry = ensurePlayerRenderer(member, canvas.width, index, layouts[index] || null);
     entry.renderer.setState(states.get(member.user_id) || member.state || "idle");
   });
   if (roomPurpose === "personal_overlay" && visible.length === 1 && visible[0].user_id === localMicUserId) {
@@ -388,11 +390,11 @@ async function refreshMembers() {
   }
   const hostMember = members.find(member => member.is_host) || members[0];
   if (roomPurpose === "collaboration") {
-    const hostBackground = members.find(member => member.is_host)?.preferences?.background || { mode: "transparent" };
+    const hostBackground = resolveRoomBackgroundPreferences(members);
     const hostBackgroundKey = JSON.stringify(hostBackground);
     if (!roomBackgroundRenderer) roomBackgroundRenderer = new AvatarRenderer(document.createElement("canvas"));
     if (roomBackgroundProfileKey !== hostBackgroundKey) {
-      roomBackgroundRenderer.setPreferences({ background: hostBackground });
+      roomBackgroundRenderer.setPreferences(hostBackground);
       roomBackgroundProfileKey = hostBackgroundKey;
     }
   }
@@ -507,26 +509,16 @@ async function boot() {
         render();
       })
       .on("broadcast", { event: "player-layout" }, ({ payload }) => {
-        if (!payload?.user_id || !payload.overrides) return;
-        const seq = Number(payload.seq) || 0;
-        const previousSeq = layoutSequences.get(payload.user_id) || 0;
-        const member = members.find(item => item.user_id === payload.user_id);
-        const stale = !!(seq && seq <= previousSeq);
+        if (!payload?.user_id) return;
         lastBroadcastReceived = {
-          at: Date.now(), member_id: payload.user_id, seq,
-          x: payload.overrides.x, y: payload.overrides.y, scale: payload.overrides.scale,
-          updated_at: payload.updated_at || null, version: payload.version || payload.updated_at || null,
-          applied: !!member && !stale,
-          reason: !member ? "member_id_not_found" : stale ? "stale_seq" : "applied"
+          at: Date.now(), member_id: payload.user_id, seq: Number(payload.seq) || 0,
+          applied: false, reason: "database_snapshot_refresh_required"
         };
-        if (stale) { renderDebugHud(); return; }
-        if (seq) layoutSequences.set(payload.user_id, seq);
-        if (member) {
-          member._debugLastLayoutSource = { source: "broadcast", at: Date.now(), version: payload.version || payload.updated_at || null };
-          member.overrides = { ...(member.overrides || {}), ...payload.overrides };
-          render();
-        }
         renderDebugHud();
+        refreshMembers().then(() => {
+          lastBroadcastReceived = { ...lastBroadcastReceived, applied: true, reason: "database_snapshot_refreshed" };
+          renderDebugHud();
+        }).catch(error => setStatus(`Layout snapshot refresh failed: ${error.message}`, true));
       })
       .on("broadcast", { event: "member-assets-updated" }, () => {
         refreshMembers().catch(error => setStatus(`Gagal memperbarui aset: ${error.message}`, true));
