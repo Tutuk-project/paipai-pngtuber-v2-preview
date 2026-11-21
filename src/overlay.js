@@ -1,4 +1,4 @@
-import { AvatarRenderer } from "./avatar-renderer.js";
+import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-avatar-fallback-1";
 import { AudioEngine } from "./audio-engine.js";
 
 let config;
