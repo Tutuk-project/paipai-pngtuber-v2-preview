@@ -2156,7 +2156,8 @@ async function generateOverlayLink(button = null) {
   try {
     // The clean OBS URL has no editor controls. Its mouth state is driven by
     // this Creator session's microphone over the room's Realtime channel.
-    // Request permission from the Generate button gesture if capture is off.
+    // Keep Creator capture active as a Realtime fallback. The OBS page also
+    // requests its own microphone permission automatically when the source loads.
     if (!micEnabled) await startMicrophone();
     let room = currentRoom;
     if (!room) {
@@ -2205,8 +2206,8 @@ async function generateOverlayLink(button = null) {
     syncOverlayGeneratorButtons("Salin Link", false, "copy");
     $("overlayLinkDialog").showModal();
     showToast(micEnabled
-      ? "Link OBS siap. Mic Creator aktif dan mengirim status avatar."
-      : "Link OBS siap, tetapi mic belum aktif. Aktifkan Mic ON di Creator agar avatar bisa mendeteksi suara.", micEnabled ? "success" : "error");
+      ? "Link OBS siap. Creator mic aktif; OBS source juga akan meminta izin mic saat dimuat."
+      : "Link OBS siap. OBS source akan meminta izin mikrofon otomatis saat dimuat; Creator mic dapat menjadi fallback.", "success");
   } catch (error) {
     syncOverlayGeneratorButtons("Generate OBS Link", false, "generate");
     showToast(`OBS Link belum bisa dibuat: ${error.message}`, "error");
