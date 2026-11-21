@@ -302,7 +302,7 @@ test("Collaboration uses a single landscape stage with bold grid and center guid
   assert.match(overlay, /ctx\.drawImage\(entry\.canvas, 0, 0, canvas\.width, canvas\.height\)/);
   assert.match(app, /drawRoomCenterGuide\(ctx, canvas\.width, canvas\.height\)/);
   assert.match(overlay, /drawCenterGuide\(ctx, canvas\.width, canvas\.height\)/);
-  assert.match(app, /Math\\.max\\(18, Math\\.round\\(width \/ 100\\)\\)/);
+  assert.match(app, /Math\.max\(18, Math\.round\(width \/ 100\)\)/);
   assert.match(backend, /"showCenterGuide"/);
   assert.match(html, /height:auto!important/);
 });
