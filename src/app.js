@@ -1470,7 +1470,7 @@ function scheduleAccessorySave(item, delay = 350) {
 async function saveAccessorySettings(item) {
   try {
     await api("update_accessory", {
-      accessory_id: item.id, x: item.x, y: item.y, w: item.w, h: item.h,
+      accessory_id: item.id, x: item.x, y: item.y, w: item.w, h: item.h, rotation: Number(item.rotation) || 0,
       mirror: !!item.mirror, follow_avatar: item.follow !== false, effects_enabled: item.effectsEnabled !== false
     });
     if (currentRoom) await loadRoomMembers();
