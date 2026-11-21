@@ -341,7 +341,7 @@ test("private background media uses server-signed URLs and only the host backgro
   assert.ok(app.includes('api("record_background_asset"'));
   assert.ok(edge.includes('action === "record_background_asset"'));
   assert.ok(edge.includes('storage.from("vio-backgrounds").list'));
-  assert.match(edge, /function signBackground\(db,[\s\S]*?createSignedUrl\(background\.storage_path, 3600\)/);
+  assert.match(edge, /function signBackground\(db: SupabaseClient,[\s\S]*?createSignedUrl\(background\.storage_path, 3600\)/);
   for (const action of ["room_members", "overlay_connect"]) {
     const start = edge.indexOf('if (action === "' + action + '")'), next = edge.indexOf('if (action === "', start + 10);
     assert.match(edge.slice(start, next > start ? next : undefined), /preferences: await signBackground\(db,/);
@@ -484,7 +484,7 @@ test("About describes the project and retains empty embed/contact placeholders",
 
 test("GitHub Pages uses a unique artifact name for each workflow attempt", () => {
   const workflow = read(".github/workflows/pages.yml");
-  const artifact = "github-pages-${{ github.run_id }}-${{ github.run_attempt }}";
+  const artifact = "github-pages-${{ github.event.workflow_run.head_sha }}-${{ github.run_attempt }}";
   assert.ok(workflow.includes("name: " + artifact));
   assert.ok(workflow.includes("artifact_name: " + artifact));
 });
