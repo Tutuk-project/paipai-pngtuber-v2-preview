@@ -425,3 +425,37 @@ test("room member and OBS overlay queries follow declared foreign-key paths thro
   assert.ok(edge.includes('typeof value.code === "string"'));
   assert.ok(edge.includes('console.error("vio-api request failed"'));
 });
+
+test("Creator workspace order is Audio, Visual+, Avatar, Aksesoris and About", () => {
+  const app = read("src/app.js"); const html = read("index.html");
+  const menuBlock = app.match(/const menus = \[([\s\S]*?)\];/)?.[1] || "";
+  const ids = [...menuBlock.matchAll(/id: "([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(ids.slice(0, 5), ["audio", "effects", "avatar", "accessories", "about"]);
+  const dock = html.match(/<nav id="mobileBottomNav"[\s\S]*?<\/nav>/)?.[0] || "";
+  const targets = [...dock.matchAll(/data-dock-target="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(targets, ["settings", "audio", "effects", "avatar", "accessories", "about"]);
+});
+test("Avatar retains animation parameters and background settings", () => {
+  const app = read("src/app.js"); const start = app.indexOf("function renderAvatarWorkspace(content)");
+  const end = app.indexOf("function renderAccessoryWorkspace(content)", start); const avatar = app.slice(start, end);
+  for (const key of ["idleBob", "breathing", "bounce", "squash", "blinkRate", "fps", "mirror", "output resolution"]) assert.ok(avatar.toLowerCase().includes(key.toLowerCase()));
+  assert.ok(avatar.includes("renderAvatarBackgroundWorkspace(content)"));
+});
+test("Accessories have their own upload and management workspace", () => {
+  const app = read("src/app.js"); const start = app.indexOf("function renderAccessoryWorkspace(content)");
+  const end = app.indexOf("function buildEffectDefaults(", start); const body = app.slice(start, end);
+  for (const key of ["uploadCharacterAccessories(files)", "accessorySettingsList", "renderAccessorySettingsList()", "renderAccessoryQuickScales()"]) assert.ok(body.includes(key));
+  assert.ok(app.includes("function bindAccessoryCanvasDrag(canvas)"));
+});
+test("Visual+ excludes background settings and Avatar includes them", () => {
+  const app = read("src/app.js"); const v = app.indexOf("function renderVisualEffectWorkspace(content)");
+  const a = app.indexOf("function renderAboutWorkspace(content)", v); const visual = app.slice(v, a);
+  const b = app.indexOf("function renderAvatarBackgroundWorkspace(content)"); const next = app.indexOf("function renderVisualEffectWorkspace(content)", b);
+  const background = app.slice(b, next); assert.ok(!visual.includes("Background mode"));
+  assert.ok(background.includes("Background mode")); assert.ok(background.includes("Tambah background"));
+});
+test("About describes the project and retains empty embed/contact placeholders", () => {
+  const app = read("src/app.js"); const start = app.indexOf("function renderAboutWorkspace(content)");
+  const end = app.indexOf("function renderSettings(menuId)", start); const body = app.slice(start, end);
+  for (const text of ["Vio Studio adalah workspace PNGTuber modular", "Dibuat untuk", "Embed links", "Admin contact"]) assert.ok(body.includes(text));
+});

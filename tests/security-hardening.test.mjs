@@ -388,21 +388,14 @@ test("view switching tolerates missing optional DOM elements", () => {
 });
 
 
-test("Creator Studio mobile dock is present and connected to real workspace sections", () => {
-  const html = read("index.html");
-  const app = read("src/app.js");
-  const css = read("assets/app.css");
-  for (const target of ["stage", "background", "audio", "effects", "profile"]) {
-    assert.match(html, new RegExp('data-dock-target="' + target + '"'));
-  }
-  assert.match(html, /id="mobileMenuButton"/);
-  assert.match(html, /id="mobileMenuBackdrop"/);
-  assert.match(app, /case "background":[\s\S]*selectMenu\("effects"\)[\s\S]*focusSettingsSection\("backgroundSettingsAccordion"\)/);
-  assert.match(app, /case "audio":[\s\S]*selectMenu\("audio"\)/);
-  assert.match(app, /case "effects":[\s\S]*focusSettingsSection\("makeupSettingsAccordion"\)/);
-  assert.match(app, /case "profile":[\s\S]*selectMenu\("profile", "profile"\)/);
-  assert.match(app, /bgGroup\.details\.id = "backgroundSettingsAccordion"/);
-  assert.match(app, /makeup\.details\.id = "makeupSettingsAccordion"/);
+test("Creator Studio mobile dock has the requested six workspace tabs", () => {
+  const html = read("index.html"); const app = read("src/app.js"); const css = read("assets/app.css");
+  const dock = html.match(/<nav id="mobileBottomNav"[\s\S]*?<\/nav>/)?.[0] || "";
+  const targets = [...dock.matchAll(/data-dock-target="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(targets, ["settings", "audio", "effects", "avatar", "accessories", "about"]);
+  assert.match(app, /case "settings":[\s\S]*?scrollIntoView/);
+  for (const id of ["audio", "effects", "avatar", "accessories", "about"]) assert.ok(app.includes("case \"" + id + "\"") || app.includes("menuId === \"" + id + "\""));
+  assert.match(css, /grid-template-columns: repeat\(6, minmax\(0,1fr\)\)/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
   assert.match(css, /\.app-shell\.in-room \.mobile-bottom-nav\s*\{\s*display: none !important/);

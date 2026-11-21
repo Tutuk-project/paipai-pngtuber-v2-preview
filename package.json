@@ -2,6 +2,10 @@
   "name": "vio-studio-v2-validation",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "node --test tests/audio-engine.test.mjs tests/avatar-renderer.test.mjs tests/accessory-renderer.test.mjs tests/background-renderer.test.mjs tests/project-smoke.test.mjs tests/security-hardening.test.mjs",
+    "check": "sh tests/check-syntax.sh && python3 tests/check_migrations.py"
+  },
   "devDependencies": {
     "playwright": "^1.56.1"
   }

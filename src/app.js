@@ -1,13 +1,14 @@
-import { AudioEngine } from "./audio-engine.js?v=20261121-auto-mic-1";
-import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-avatar-fallback-2";
+import { AudioEngine } from "./audio-engine.js?v=20261121-ui-reorg-1";
+import { AvatarRenderer } from "./avatar-renderer.js?v=20261121-ui-reorg-1";
 
 const $ = (id) => document.getElementById(id);
 const viewIds = ["loginGate", "editorView", "collaborationView", "adminView", "overlayView"];
 const menus = [
-  { id: "profile", icon: "◉", label: "Profile", title: "Profile" },
-  { id: "character", icon: "▧", label: "Character", title: "Character & Assets" },
-  { id: "audio", icon: "♫", label: "Microphone", title: "Microphone" },
-  { id: "effects", icon: "✧", label: "Visual Effect +", title: "Visual Effect +" },
+  { id: "audio", icon: "♫", label: "Audio", title: "Audio" },
+  { id: "effects", icon: "✧", label: "Visual +", title: "Visual +" },
+  { id: "avatar", icon: "▧", label: "Avatar", title: "Avatar" },
+  { id: "accessories", icon: "♢", label: "Aksesoris", title: "Aksesoris" },
+  { id: "about", icon: "ⓘ", label: "About", title: "About Vio Studio" },
   { id: "collaboration", icon: "◎", label: "GO Collaboration", title: "GO Collaboration" },
   { id: "tester", icon: "⚗", label: "Test Lab", title: "Test Lab", roles: ["admin", "tester"] },
   { id: "admin", icon: "⬡", label: "Admin Center", title: "Admin Control Center", roles: ["admin"] },
@@ -16,7 +17,7 @@ const menus = [
 let config = null;
 let supabase = null;
 let currentUser = null;
-let activeMenu = "profile";
+let activeMenu = "about";
 let audio = null;
 let avatarRenderer = null;
 let currentRoom = null;
@@ -147,31 +148,21 @@ function focusSettingsSection(sectionId) {
 
 function selectMobileDock(target) {
   switch (target) {
-    case "stage":
-      if ($("adminView") && !$("adminView").hidden) selectMenu("profile", "stage");
+    case "settings": {
+      closeMobileMenu();
+      showView("editorView");
+      const pageTitle = $("pageTitle");
+      if (pageTitle) pageTitle.textContent = "Settings";
+      updateMobileDock("settings");
       document.querySelector(".preview-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      updateMobileDock("stage");
       break;
-    case "background":
-      selectMenu("effects");
-      updateMobileDock("background");
-      focusSettingsSection("backgroundSettingsAccordion");
-      break;
-    case "audio":
-      selectMenu("audio");
-      updateMobileDock("audio");
-      break;
-    case "effects":
-      selectMenu("effects");
-      updateMobileDock("effects");
-      focusSettingsSection("makeupSettingsAccordion");
-      break;
-    case "profile":
-      selectMenu("profile", "profile");
-      updateMobileDock("profile");
-      break;
-    default:
-      break;
+    }
+    case "audio": selectMenu("audio"); break;
+    case "effects": selectMenu("effects"); break;
+    case "avatar": selectMenu("avatar"); break;
+    case "accessories": selectMenu("accessories"); break;
+    case "about": selectMenu("about"); break;
+    default: break;
   }
 }
 
@@ -187,9 +178,11 @@ function selectMenu(menuId, dockTarget = null) {
   activeMenu = menuId;
   const meta = menus.find(item => item.id === menuId);
   if (dockTarget) updateMobileDock(dockTarget);
-  else if (menuId === "profile") updateMobileDock("stage");
+  else if (menuId === "about") updateMobileDock("about");
   else if (menuId === "audio") updateMobileDock("audio");
   else if (menuId === "effects") updateMobileDock("effects");
+  else if (menuId === "avatar") updateMobileDock("avatar");
+  else if (menuId === "accessories") updateMobileDock("accessories");
   else updateMobileDock("");
 
   // Reveal the requested view before touching optional navigation/settings UI.
@@ -205,7 +198,7 @@ function selectMenu(menuId, dockTarget = null) {
 
   showView("editorView");
   const pageTitle = $("pageTitle");
-  if (pageTitle) pageTitle.textContent = menuId === "profile" ? "Avatar Preview" : meta?.title || "Workspace";
+  if (pageTitle) pageTitle.textContent = meta?.title || "Workspace";
   renderNavigation();
 
   try {
@@ -453,8 +446,8 @@ function buildExpressionUploadTile(state, labelText) {
   return tile;
 }
 
-function renderCharacterWorkspace(content) {
-  const characterGroup = makeSettingsAccordion("Character & Assets", "Avatar tersimpan, ekspresi PNG, dan aksesori");
+function renderAvatarWorkspace(content) {
+  const characterGroup = makeSettingsAccordion("Avatar library", "Avatar tersimpan dan ekspresi PNG");
   const selectorField = document.createElement("div");
   selectorField.className = "setting-field character-selector-field";
   const selectorLabel = document.createElement("label");
@@ -496,7 +489,7 @@ function renderCharacterWorkspace(content) {
       else if (value) await switchActiveCharacter(value);
     } catch (error) {
       showAppToast(`Tidak dapat mengganti avatar: ${error.message}`, "error");
-      renderSettings("character");
+      renderSettings("avatar");
     }
   });
   selectorField.append(selectorLabel, select);
@@ -516,39 +509,9 @@ function renderCharacterWorkspace(content) {
     actionButton("Hapus karakter", openCharacterDeleteDialog)
   );
 
-  const accessorySection = document.createElement("section");
-  accessorySection.className = "accessory-library";
-  const accessoryHeading = document.createElement("div");
-  accessoryHeading.className = "accessory-library-heading";
-  const accessoryTitle = document.createElement("h3");
-  accessoryTitle.textContent = "Accessories";
-  const accessoryHint = document.createElement("p");
-  accessoryHint.className = "muted";
-  accessoryHint.textContent = "Tekan + untuk mengunggah, lalu geser aksesori langsung di jendela preview. Skala tiap aksesori tersedia di bawah indikator mikrofon.";
-  accessoryHeading.append(accessoryTitle, accessoryHint);
-  const accessoryInput = document.createElement("input");
-  accessoryInput.type = "file";
-  accessoryInput.accept = "image/png,image/webp";
-  accessoryInput.multiple = true;
-  accessoryInput.hidden = true;
-  const accessoryAdd = document.createElement("button");
-  accessoryAdd.type = "button";
-  accessoryAdd.className = "accessory-add-tile";
-  accessoryAdd.innerHTML = '<span>+</span><small>Tambah aksesori</small>';
-  accessoryAdd.addEventListener("click", () => accessoryInput.click());
-  accessoryInput.addEventListener("change", async () => {
-    const files = [...(accessoryInput.files || [])];
-    accessoryInput.value = "";
-    await uploadCharacterAccessories(files);
-  });
-  const accessoryControls = document.createElement("div");
-  accessoryControls.id = "accessorySettingsList";
-  accessoryControls.className = "accessory-library-grid";
-  accessorySection.append(accessoryHeading, accessoryInput, accessoryAdd, accessoryControls);
-
   const uploadCard = document.createElement("div");
   uploadCard.className = "character-upload-section";
-  uploadCard.append(selectorField, uploadTitle, uploadGrid, characterActions, accessorySection);
+  uploadCard.append(selectorField, uploadTitle, uploadGrid, characterActions);
   characterGroup.body.append(uploadCard);
 
   const main = makeSettingsAccordion("Main Settings", "Gerakan avatar, mirror, dan resolusi output");
@@ -571,6 +534,16 @@ function renderCharacterWorkspace(content) {
     input.addEventListener("input", () => { profilePreferences[key] = Number(input.value); drawPreview(); });
     motion.append(field);
   }
+  const scaleField = settingField("Default avatar scale", "avatarDefaultScale", String(profilePreferences.scale ?? 1), "Skala bawaan saat masuk room.", "range");
+  const scaleInput = scaleField.querySelector("input");
+  scaleInput.min = "0"; scaleInput.max = "2"; scaleInput.step = "0.05";
+  scaleInput.addEventListener("input", () => {
+    profilePreferences.scale = Number(scaleInput.value);
+    profilePreferences.avatarScalePercent = Math.round((profilePreferences.scale - 1) * 100);
+    avatarScalePercent = profilePreferences.avatarScalePercent;
+    drawPreview();
+  });
+
   const mirror = document.createElement("label");
   mirror.className = "check-field";
   const mirrorInput = document.createElement("input");
@@ -619,17 +592,45 @@ function renderCharacterWorkspace(content) {
   height.addEventListener("change", applyResolution);
   presetField.append(presetLabel, preset);
   resolution.append(presetField, widthField, heightField);
-  const save = actionButton("Simpan Main Settings", async () => {
-    try {
-      await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: profilePreferences });
-      drawPreview();
-      if (currentRoom) await broadcastMemberAssetsUpdated();
-      showAppToast("Main Settings tersimpan");
-    } catch (error) { showAppToast(`Gagal menyimpan: ${error.message}`, "error"); }
-  }, true);
-  main.body.append(motion, resolutionTitle, resolution, save);
+  const save = actionButton("Simpan pengaturan avatar", saveAvatarPreferences, true);
+  main.body.append(scaleField, motion, resolutionTitle, resolution, save);
 
   content.append(characterGroup.details, main.details);
+  renderAvatarBackgroundWorkspace(content);
+}
+
+
+function renderAccessoryWorkspace(content) {
+  const accessorySection = document.createElement("section");
+  accessorySection.className = "accessory-library";
+  const accessoryHeading = document.createElement("div");
+  accessoryHeading.className = "accessory-library-heading";
+  const accessoryTitle = document.createElement("h3");
+  accessoryTitle.textContent = "Accessories";
+  const accessoryHint = document.createElement("p");
+  accessoryHint.className = "muted";
+  accessoryHint.textContent = "Tekan + untuk mengunggah, lalu geser aksesori langsung di jendela preview. Skala tiap aksesori tersedia di bawah indikator mikrofon.";
+  accessoryHeading.append(accessoryTitle, accessoryHint);
+  const accessoryInput = document.createElement("input");
+  accessoryInput.type = "file";
+  accessoryInput.accept = "image/png,image/webp";
+  accessoryInput.multiple = true;
+  accessoryInput.hidden = true;
+  const accessoryAdd = document.createElement("button");
+  accessoryAdd.type = "button";
+  accessoryAdd.className = "accessory-add-tile";
+  accessoryAdd.innerHTML = '<span>+</span><small>Tambah aksesori</small>';
+  accessoryAdd.addEventListener("click", () => accessoryInput.click());
+  accessoryInput.addEventListener("change", async () => {
+    const files = [...(accessoryInput.files || [])];
+    accessoryInput.value = "";
+    await uploadCharacterAccessories(files);
+  });
+  const accessoryControls = document.createElement("div");
+  accessoryControls.id = "accessorySettingsList";
+  accessoryControls.className = "accessory-library-grid";
+  accessorySection.append(accessoryHeading, accessoryInput, accessoryAdd, accessoryControls);
+  content.append(accessorySection);
   renderAccessorySettingsList();
   renderAccessoryQuickScales();
 }
@@ -664,7 +665,7 @@ function buildEffectDefaults(raw = {}) {
   return effects;
 }
 
-function renderVisualEffectWorkspace(content) {
+function renderAvatarBackgroundWorkspace(content) {
   const prefs = profilePreferences;
   const background = { mode: "transparent", ...(prefs.background || {}) };
   const bgGroup = makeSettingsAccordion("Background", "Warna, gradient, gambar, GIF, atau video");
@@ -740,7 +741,7 @@ function renderVisualEffectWorkspace(content) {
       if (currentRoom) await loadRoomMembers();
       await broadcastMemberAssetsUpdated();
       showAppToast("Background berhasil diunggah");
-      renderSettings("effects");
+      renderSettings("avatar");
     } catch (error) {
       await supabase.storage.from("vio-backgrounds").remove([storagePath]).catch(() => {});
       showAppToast(`Upload background gagal: ${error.message}`, "error");
@@ -762,7 +763,11 @@ function renderVisualEffectWorkspace(content) {
   mediaWrap.append(mediaButton, mediaInput, clearBackground);
   bgGroup.body.append(modeField, palette, mediaWrap);
   syncPalette();
-
+  bgGroup.body.append(actionButton("Simpan background", () => persistProfilePreferences("Background tersimpan"), true));
+  content.append(bgGroup.details);
+}
+function renderVisualEffectWorkspace(content) {
+  const prefs = profilePreferences;
   const makeup = makeSettingsAccordion("Makeup", "Pilih efek untuk membuka parameter");
   makeup.details.id = "makeupSettingsAccordion";
   const effects = buildEffectDefaults(prefs.effects || {});
@@ -869,76 +874,71 @@ function renderVisualEffectWorkspace(content) {
     } catch (error) { showAppToast(`Gagal menyimpan efek: ${error.message}`, "error"); }
   }, true);
   makeup.body.append(global, accessorySwitch, buttonGrid, parameterPanel, save);
-  content.append(bgGroup.details, makeup.details);
+  content.append(makeup.details);
 }
 
+function renderAboutWorkspace(content) {
+  const intro = document.createElement("section"); intro.className = "about-section";
+  const heading = document.createElement("h3"); heading.textContent = "Vio Studio";
+  const description = document.createElement("p"); description.textContent = "Vio Studio adalah workspace PNGTuber modular untuk mengelola karakter, animasi reaktif mikrofon, tampilan visual, dan overlay live yang dapat digunakan melalui OBS atau aplikasi streaming berbasis Browser Source.";
+  intro.append(heading, description);
+  const audience = document.createElement("section"); audience.className = "about-section";
+  const audienceTitle = document.createElement("h3"); audienceTitle.textContent = "Dibuat untuk";
+  const audienceText = document.createElement("p"); audienceText.textContent = "Konten kreator livestream, PNGTuber/VTuber, serta kreator dan kolaborator yang membutuhkan avatar live dan shared stage.";
+  audience.append(audienceTitle, audienceText);
+  const links = document.createElement("section"); links.className = "about-section";
+  const linksTitle = document.createElement("h3"); linksTitle.textContent = "Project links";
+  const linkGrid = document.createElement("div"); linkGrid.className = "about-link-grid";
+  for (const item of [["GitHub repository", "https://github.com/Tutuk-project/paipai-pngtuber-v2-preview", "Source code dan checkpoint proyek"], ["Live preview", "https://tutuk-project.github.io/paipai-pngtuber-v2-preview/", "Creator Studio versi preview"]]) {
+    const link = document.createElement("a"); link.className = "about-link-card"; link.href = item[1]; link.target = "_blank"; link.rel = "noopener noreferrer";
+    const name = document.createElement("strong"); name.textContent = item[0]; const note = document.createElement("small"); note.textContent = item[2];
+    link.append(name, note); linkGrid.append(link);
+  }
+  links.append(linksTitle, linkGrid);
+  const embeds = document.createElement("section"); embeds.className = "about-section";
+  const embedsTitle = document.createElement("h3"); embedsTitle.textContent = "Embed links";
+  const embedsText = document.createElement("p"); embedsText.className = "muted"; embedsText.textContent = "Belum ada embed link yang ditambahkan.";
+  embeds.append(embedsTitle, embedsText);
+  const contact = document.createElement("section"); contact.className = "about-section";
+  const contactTitle = document.createElement("h3"); contactTitle.textContent = "Admin contact";
+  const contactText = document.createElement("p"); contactText.className = "muted"; contactText.textContent = "Belum ditambahkan.";
+  contact.append(contactTitle, contactText); content.append(intro, audience, links, embeds, contact);
+}
 function renderSettings(menuId) {
   const content = $("settingsContent");
   content.replaceChildren();
   const meta = menus.find(item => item.id === menuId);
   $("settingsTitle").textContent = meta?.title || "Settings";
 
-  if (menuId === "profile") {
-    const grid = document.createElement("div");
-    grid.className = "setting-grid";
-    const usernameField = settingField("Username", "profileUsername", currentUser?.username || "", "Username akun dikelola Admin.", "text");
-    usernameField.querySelector("input").readOnly = true;
-    grid.append(usernameField);
-    grid.append(settingField("Display name", "profileDisplayName", currentUser?.display_name || currentUser?.username || ""));
-    const profileDeviceField = document.createElement("div"); profileDeviceField.className = "setting-field";
-    const profileDeviceLabel = document.createElement("label"); profileDeviceLabel.htmlFor = "profileDevice"; profileDeviceLabel.textContent = "Default microphone input";
-    const profileDevice = document.createElement("select"); profileDevice.id = "profileDevice"; profileDevice.className = "select-input"; profileDevice.innerHTML = '<option value="">System default</option>'; profileDevice.value = profilePreferences.deviceId || "";
-    profileDeviceField.append(profileDeviceLabel, profileDevice); grid.append(profileDeviceField);
-    const scale = settingField("Default avatar scale", "profileScale", String(profilePreferences.scale ?? 1), "Default scale used when joining a room.", "range");
-    const scaleInput = scale.querySelector("input"); scaleInput.min = "0"; scaleInput.max = "2"; scaleInput.step = "0.05";
-    const sensitivity = settingField("Default mic sensitivity", "profileSensitivity", String(profilePreferences.sensitivity ?? 1), "Adaptive threshold multiplier.", "range");
-    const sensitivityInput = sensitivity.querySelector("input"); sensitivityInput.min = "0.5"; sensitivityInput.max = "2"; sensitivityInput.step = "0.05";
-    const boost = settingField("Default mic booster (dB)", "profileBoost", String(profilePreferences.boostDb ?? 6), "Digital gain, limited to +24 dB.", "range");
-    const boostInput = boost.querySelector("input"); boostInput.min = "0"; boostInput.max = "24"; boostInput.step = "1";
-    grid.append(scale, sensitivity, boost);
-    content.append(grid, actionButton("Refresh microphone devices", refreshAudioDevices), actionButton("Save profile preferences", saveProfilePreferences, true), Object.assign(document.createElement("p"), { className: "muted", textContent: "Pengaturan Collaboration adalah override sementara. Perubahan di room tidak menimpa preferensi profil." }));
-    refreshAudioDevices();
-    return;
-  }
+  if (menuId === "about") { renderAboutWorkspace(content); return; }
 
-  if (menuId === "character") {
-    renderCharacterWorkspace(content);
-    return;
-  }
+  if (menuId === "avatar") { renderAvatarWorkspace(content); return; }
 
+  if (menuId === "accessories") { renderAccessoryWorkspace(content); return; }
   if (menuId === "audio") {
-    const deviceWrap = document.createElement("div");
-    deviceWrap.className = "setting-field";
-    const label = document.createElement("label");
-    label.htmlFor = "audioDevice";
-    label.textContent = "Microphone input";
-    const select = document.createElement("select");
-    select.id = "audioDevice";
-    select.className = "select-input";
-    select.innerHTML = '<option value="">System default</option>';
+    const deviceWrap = document.createElement("div"); deviceWrap.className = "setting-field";
+    const label = document.createElement("label"); label.htmlFor = "audioDevice"; label.textContent = "Microphone input";
+    const select = document.createElement("select"); select.id = "audioDevice"; select.className = "select-input";
+    select.innerHTML = '<option value="">System default</option>'; select.value = profilePreferences.deviceId || "";
     select.addEventListener("change", async () => {
-      roomOverrides.deviceId = select.value;
-      if (audio) { await audio.stop(); audio.setOptions({ deviceId: select.value }); await audio.start(); }
+      profilePreferences.deviceId = select.value;
+      if (!currentRoom && audio) { const wasActive = micEnabled; try { if (wasActive) await audio.stop(); audio.setOptions({ deviceId: profilePreferences.deviceId }); if (wasActive) await audio.start(); }
+        catch (error) { showAppToast("Tidak dapat mengganti mikrofon: " + error.message, "error"); } }
     });
     deviceWrap.append(label, select);
-    const grid = document.createElement("div");
-    grid.className = "setting-grid";
-    const sensitivityField = settingField("Sensitivity multiplier", "audioSensitivity", "1", "Lower threshold = more sensitive.", "range");
-    const sensitivityInput = sensitivityField.querySelector("input");
-    sensitivityInput.min = "0.5"; sensitivityInput.max = "2"; sensitivityInput.step = "0.05";
-    sensitivityInput.addEventListener("input", e => { roomOverrides.sensitivity = Number(e.target.value); audio?.setOptions({ sensitivity: roomOverrides.sensitivity }); });
+    const grid = document.createElement("div"); grid.className = "setting-grid";
+    const sensitivityField = settingField("Sensitivity multiplier", "audioSensitivity", String(profilePreferences.sensitivity ?? 1), "Lower threshold = more sensitive.", "range");
+    const sensitivityInput = sensitivityField.querySelector("input"); sensitivityInput.min = "0.5"; sensitivityInput.max = "2"; sensitivityInput.step = "0.05";
+    sensitivityInput.addEventListener("input", () => { profilePreferences.sensitivity = Number(sensitivityInput.value); if (!currentRoom) { roomOverrides.sensitivity = profilePreferences.sensitivity; audio?.setOptions({ sensitivity: profilePreferences.sensitivity }); } });
     grid.append(sensitivityField);
-    const boostField = settingField("Mic booster (dB)", "audioBoost", "6", "Digital gain is limited to +24 dB to reduce clipping.", "range");
-    const boostInput = boostField.querySelector("input");
-    boostInput.min = "0"; boostInput.max = "24"; boostInput.step = "1";
-    boostInput.addEventListener("input", e => { roomOverrides.boostDb = Number(e.target.value); audio?.setOptions({ boostDb: roomOverrides.boostDb }); });
+    const boostField = settingField("Mic booster (dB)", "audioBoost", String(profilePreferences.boostDb ?? 6), "Digital gain is limited to +24 dB to reduce clipping.", "range");
+    const boostInput = boostField.querySelector("input"); boostInput.min = "0"; boostInput.max = "24"; boostInput.step = "1";
+    boostInput.addEventListener("input", () => { profilePreferences.boostDb = Number(boostInput.value); if (!currentRoom) { roomOverrides.boostDb = profilePreferences.boostDb; audio?.setOptions({ boostDb: profilePreferences.boostDb }); } });
     grid.append(boostField);
-    const buttons = document.createElement("div");
-    buttons.className = "settings-actions";
+    const buttons = document.createElement("div"); buttons.className = "settings-actions";
     buttons.append(actionButton("Refresh devices", refreshAudioDevices), actionButton("Start microphone", startMicrophone, true), actionButton("Stop microphone", stopMicrophone));
-    content.append(deviceWrap, grid, buttons, Object.assign(document.createElement("p"), { className: "muted", textContent: "Audio diproses lokal. Hanya perubahan status idle/talking yang dikirim ke room, bukan suara mentah." }));
-    refreshAudioDevices();
-    return;
+    content.append(deviceWrap, grid, buttons, actionButton("Simpan pengaturan audio", saveAudioPreferences, true), Object.assign(document.createElement("p"), { className: "muted", textContent: "Audio diproses lokal. Hanya status idle/talking yang dikirim ke room, bukan suara mentah." }));
+    refreshAudioDevices(); return;
   }
 
   if (menuId === "effects") {
@@ -1045,7 +1045,7 @@ async function login(username, pairingCode) {
   const mobileDock = $("mobileBottomNav");
   if (mobileDock) mobileDock.hidden = false;
   // selectMenu renders navigation once, after making the editor visible.
-  selectMenu("profile");
+  selectMenu("about");
   await restoreSavedRoom();
 }
 
@@ -1062,33 +1062,17 @@ async function loadCurrentProfile() {
   }
 }
 
-async function saveProfilePreferences() {
-  const displayName = $("profileDisplayName").value.trim();
-  const preferences = {
-    ...profilePreferences,
-    scale: Math.max(0, Math.min(2, Number($("profileScale").value) || 1)),
-    avatarScalePercent: Math.round((Math.max(0, Math.min(2, Number($("profileScale").value) || 1)) - 1) * 100),
-    sensitivity: Number($("profileSensitivity").value),
-    boostDb: Number($("profileBoost").value),
-    deviceId: $("profileDevice").value,
-  };
+async function persistProfilePreferences(successMessage) {
   try {
-    await api("profile_save", { display_name: displayName, preferences });
-    currentUser.display_name = displayName;
-    profilePreferences = preferences;
-    avatarScalePercent = preferences.avatarScalePercent;
-    updateAvatarScaleWidget();
-    drawPreview();
-    const deviceChanged = roomOverrides.deviceId !== preferences.deviceId;
-    roomOverrides = { ...roomOverrides, scale: preferences.scale, sensitivity: preferences.sensitivity, boostDb: preferences.boostDb, deviceId: preferences.deviceId };
-    if (audio) {
-      if (deviceChanged) { await audio.stop(); audio.setOptions({ deviceId: preferences.deviceId, sensitivity: preferences.sensitivity, boostDb: preferences.boostDb }); await audio.start(); }
-      else audio.setOptions({ sensitivity: preferences.sensitivity, boostDb: preferences.boostDb });
-    }
-    showMessage("loginMessage", "Preferensi profil berhasil disimpan.", "success");
-    renderNavigation();
-  } catch (error) { alert(`Gagal menyimpan profil: ${error.message}`); }
+    await api("profile_save", { display_name: currentUser.display_name || currentUser.username, preferences: profilePreferences });
+    avatarScalePercent = Math.max(-100, Math.min(100, Math.round(Number(profilePreferences.avatarScalePercent) || 0)));
+    updateAvatarScaleWidget(); drawPreview();
+    if (currentRoom) { await loadRoomMembers(); await broadcastMemberAssetsUpdated(); }
+    showAppToast(successMessage);
+  } catch (error) { showAppToast("Gagal menyimpan pengaturan: " + error.message, "error"); }
 }
+async function saveAudioPreferences() { return persistProfilePreferences("Pengaturan audio tersimpan"); }
+async function saveAvatarPreferences() { return persistProfilePreferences("Pengaturan avatar tersimpan"); }
 
 async function restoreSavedRoom() {
   const roomId = profilePreferences.lastRoomId;
@@ -2131,7 +2115,7 @@ async function leaveRoom(restoreView = true) {
   generatedOverlayUrl = "";
   syncOverlayGeneratorButtons("Generate OBS Link", false, "generate");
   $("app").classList.remove("in-room");
-  if (restoreView && currentUser) selectMenu("profile");
+  if (restoreView && currentUser) selectMenu("about");
 }
 
 async function generateOverlayLink(button = null) {
