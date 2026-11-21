@@ -731,7 +731,7 @@ function renderAvatarBackgroundWorkspace(content) {
       if (currentRoom) await loadRoomMembers();
       await broadcastMemberAssetsUpdated();
       showAppToast("Background berhasil diunggah");
-      renderSettings("avatar");
+      renderSettings("effects");
     } catch (error) {
       await supabase.storage.from("vio-backgrounds").remove([storagePath]).catch(() => {});
       showAppToast(`Upload background gagal: ${error.message}`, "error");
