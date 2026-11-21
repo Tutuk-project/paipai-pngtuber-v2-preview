@@ -103,6 +103,77 @@ function renderNavigation() {
   if (accountInitial) accountInitial.textContent = (currentUser?.username || "?").slice(0, 1).toUpperCase();
 }
 
+function setMobileMenuOpen(open) {
+  const app = $("app");
+  const sidebar = $("sidebar");
+  if (!app || !sidebar) return;
+  app.classList.toggle("mobile-menu-open", !!open);
+  sidebar.classList.toggle("is-collapsed", !open);
+  const backdrop = $("mobileMenuBackdrop");
+  if (backdrop) backdrop.hidden = !open;
+  const menuButton = $("mobileMenuButton");
+  if (menuButton) menuButton.setAttribute("aria-expanded", String(!!open));
+  const toggle = $("sidebarToggle");
+  if (toggle) {
+    toggle.textContent = open ? "‹" : "›";
+    toggle.title = open ? "Close navigation" : "Expand sidebar";
+    toggle.setAttribute("aria-label", toggle.title);
+  }
+}
+
+function closeMobileMenu() {
+  if ($("app")?.classList.contains("mobile-menu-open")) setMobileMenuOpen(false);
+}
+
+function updateMobileDock(target) {
+  const nav = $("mobileBottomNav");
+  if (!nav) return;
+  for (const button of nav.querySelectorAll("[data-dock-target]")) {
+    const active = button.dataset.dockTarget === target;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+}
+
+function focusSettingsSection(sectionId) {
+  requestAnimationFrame(() => {
+    const section = $(sectionId);
+    if (!section) return;
+    section.open = true;
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function selectMobileDock(target) {
+  switch (target) {
+    case "stage":
+      selectMenu("profile");
+      updateMobileDock("stage");
+      break;
+    case "background":
+      selectMenu("effects");
+      updateMobileDock("background");
+      focusSettingsSection("backgroundSettingsAccordion");
+      break;
+    case "audio":
+      selectMenu("audio");
+      updateMobileDock("audio");
+      break;
+    case "effects":
+      selectMenu("effects");
+      updateMobileDock("effects");
+      focusSettingsSection("makeupSettingsAccordion");
+      break;
+    case "profile":
+      selectMenu("character");
+      updateMobileDock("profile");
+      break;
+    default:
+      break;
+  }
+}
+
 function selectMenu(menuId) {
   if (menuId === "collaboration") {
     openRoomChooser();
@@ -111,8 +182,14 @@ function selectMenu(menuId) {
   if (menuId === "admin" && currentUser?.role !== "admin") return;
   if (menuId === "tester" && !["admin", "tester"].includes(currentUser?.role)) return;
 
+  closeMobileMenu();
   activeMenu = menuId;
   const meta = menus.find(item => item.id === menuId);
+  if (menuId === "profile") updateMobileDock("stage");
+  else if (menuId === "character") updateMobileDock("profile");
+  else if (menuId === "audio") updateMobileDock("audio");
+  else if (menuId === "effects") updateMobileDock("effects");
+  else updateMobileDock("");
 
   // Reveal the requested view before touching optional navigation/settings UI.
   // This prevents a sidebar DOM mismatch from leaving the whole app blank.
@@ -590,6 +667,7 @@ function renderVisualEffectWorkspace(content) {
   const prefs = profilePreferences;
   const background = { mode: "transparent", ...(prefs.background || {}) };
   const bgGroup = makeSettingsAccordion("Background", "Warna, gradient, gambar, GIF, atau video");
+  bgGroup.details.id = "backgroundSettingsAccordion";
   const modeField = document.createElement("div");
   modeField.className = "setting-field";
   const modeLabel = document.createElement("label");
@@ -685,6 +763,7 @@ function renderVisualEffectWorkspace(content) {
   syncPalette();
 
   const makeup = makeSettingsAccordion("Makeup", "Pilih efek untuk membuka parameter");
+  makeup.details.id = "makeupSettingsAccordion";
   const effects = buildEffectDefaults(prefs.effects || {});
   const global = document.createElement("label");
   global.className = "check-field";
@@ -962,6 +1041,8 @@ async function login(username, pairingCode) {
   $("footerSession").textContent = `Session: ${currentUser.username} · ${currentUser.role}`;
   const loginGate = $("loginGate");
   if (loginGate) loginGate.hidden = true;
+  const mobileDock = $("mobileBottomNav");
+  if (mobileDock) mobileDock.hidden = false;
   // selectMenu renders navigation once, after making the editor visible.
   selectMenu("profile");
   await restoreSavedRoom();
@@ -1035,6 +1116,9 @@ async function logout() {
   // Keep the device-bound anonymous Supabase session so this trusted device can
   // return with username only. Admin can revoke/reset it if the device is lost.
   currentUser = null;
+  closeMobileMenu();
+  const mobileDock = $("mobileBottomNav");
+  if (mobileDock) mobileDock.hidden = true;
   showView("loginGate");
   $("loginGate").hidden = false;
   $("footerSession").textContent = "Device session retained · enter username to continue";
@@ -2271,11 +2355,24 @@ async function startAdminSupportView(userId) {
 
 function setupEvents() {
   $("sidebarToggle").addEventListener("click", () => {
-    const side = $("sidebar"); side.classList.toggle("is-collapsed");
+    const side = $("sidebar");
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      setMobileMenuOpen(!$("app").classList.contains("mobile-menu-open"));
+      return;
+    }
+    side.classList.toggle("is-collapsed");
     const collapsed = side.classList.contains("is-collapsed");
     $("sidebarToggle").textContent = collapsed ? "›" : "‹";
     $("sidebarToggle").title = collapsed ? "Expand sidebar" : "Collapse sidebar";
     $("sidebarToggle").setAttribute("aria-label", $("sidebarToggle").title);
+  });
+  $("mobileMenuButton").addEventListener("click", () => {
+    setMobileMenuOpen(!$("app").classList.contains("mobile-menu-open"));
+  });
+  $("mobileMenuBackdrop").addEventListener("click", closeMobileMenu);
+  $("mobileBottomNav").addEventListener("click", event => {
+    const button = event.target.closest("[data-dock-target]");
+    if (button) selectMobileDock(button.dataset.dockTarget);
   });
   $("usernameInput").addEventListener("input", () => {
     const isRootAdmin = $("usernameInput").value.trim().toLowerCase() === "paipai77";
@@ -2299,7 +2396,7 @@ function setupEvents() {
       $("loginButton").disabled = false;
     }
   });
-  $("logoutButton").addEventListener("click", logout);
+  $("logoutButton").addEventListener("click", () => { closeMobileMenu(); logout(); });
   $("topRoomButton").addEventListener("click", openRoomChooser);
   $("exitRoom").addEventListener("click", () => leaveRoom(true));
   $("copyRoomCode").addEventListener("click", async () => { if (currentRoom) { try { await copyText(currentRoom.room_code); showToast("Kode room disalin"); } catch (error) { showToast(error.message, "error"); } } });
