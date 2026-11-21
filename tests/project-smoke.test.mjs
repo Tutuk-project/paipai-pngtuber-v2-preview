@@ -452,12 +452,16 @@ test("Accessories have their own upload and management workspace", () => {
 test("Visual+ includes background settings and Avatar no longer duplicates them", () => {
   const app = read("src/app.js"); const v = app.indexOf("function renderVisualEffectWorkspace(content)");
   const a = app.indexOf("function renderAboutWorkspace(content)", v); const visual = app.slice(v, a);
+  const bgStart = app.indexOf("function renderAvatarBackgroundWorkspace(content)");
+  const bgEnd = app.indexOf("function renderVisualEffectWorkspace(content)", bgStart);
+  const background = app.slice(bgStart, bgEnd);
   const avatarStart = app.indexOf("function renderAvatarWorkspace(content)");
   const accessoryStart = app.indexOf("function renderAccessoryWorkspace(content)", avatarStart);
   const avatar = app.slice(avatarStart, accessoryStart);
   assert.ok(visual.includes("renderAvatarBackgroundWorkspace(content)"));
-  assert.ok(visual.includes("Background mode"));
-  assert.ok(visual.includes("Tambah background"));
+  assert.ok(background.includes("Background mode"));
+  assert.ok(background.includes("Tambah background"));
+  assert.ok(background.includes('renderSettings("effects")'));
   assert.ok(!avatar.includes("renderAvatarBackgroundWorkspace(content)"));
 });
 test("About describes the project and retains empty embed/contact placeholders", () => {
