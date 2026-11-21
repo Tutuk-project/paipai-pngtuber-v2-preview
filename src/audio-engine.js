@@ -40,6 +40,12 @@ export class AudioEngine extends EventTarget {
     globalThis.document?.addEventListener?.("visibilitychange", () => {
       if (globalThis.document.visibilityState === "visible") this.resumeHandler();
     });
+    // Chrome/CEF may keep Web Audio suspended until a user activation even
+    // after microphone permission is granted. Keep the OBS page visually clean:
+    // the first click/tap/key anywhere silently retries AudioContext.resume().
+    for (const eventName of ["pointerdown", "touchend", "keydown"]) {
+      globalThis.document?.addEventListener?.(eventName, this.resumeHandler, { capture: true, passive: true });
+    }
   }
 
   async start() {
