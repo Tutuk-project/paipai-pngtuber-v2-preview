@@ -372,3 +372,43 @@ test("view switching tolerates missing optional DOM elements", () => {
   assert.match(showView, /const view = \$\(viewId\);[\s\S]*if \(view\) view\.hidden/);
   assert.match(showView, /if \(roomButton\) roomButton\.hidden/);
 });
+
+
+test("Creator Studio mobile dock is present and connected to real workspace sections", () => {
+  const html = read("index.html");
+  const app = read("src/app.js");
+  const css = read("assets/app.css");
+  for (const target of ["stage", "background", "audio", "effects", "profile"]) {
+    assert.match(html, new RegExp('data-dock-target="' + target + '"'));
+  }
+  assert.match(html, /id="mobileMenuButton"/);
+  assert.match(html, /id="mobileMenuBackdrop"/);
+  assert.match(app, /case "background":[\s\S]*selectMenu\("effects"\)[\s\S]*focusSettingsSection\("backgroundSettingsAccordion"\)/);
+  assert.match(app, /case "audio":[\s\S]*selectMenu\("audio"\)/);
+  assert.match(app, /case "effects":[\s\S]*focusSettingsSection\("makeupSettingsAccordion"\)/);
+  assert.match(app, /case "profile":[\s\S]*selectMenu\("character"\)/);
+  assert.match(app, /bgGroup\.details\.id = "backgroundSettingsAccordion"/);
+  assert.match(app, /makeup\.details\.id = "makeupSettingsAccordion"/);
+  assert.match(css, /@media \(max-width: 760px\)/);
+  assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /\.app-shell\.in-room \.mobile-bottom-nav\s*\{\s*display: none !important/);
+});
+
+test("mobile navigation does not replace avatar, audio, OBS, backend, or Collaboration engines", () => {
+  const app = read("src/app.js");
+  const renderer = read("src/avatar-renderer.js");
+  const audio = read("src/audio-engine.js");
+  const overlay = read("src/overlay.js");
+  const html = read("index.html");
+  assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\.js"/);
+  assert.match(app, /import \{ AvatarRenderer \} from "\.\/avatar-renderer\.js"/);
+  assert.match(app, /function drawPreview\(\)/);
+  assert.match(app, /async function generateOverlayLink\(/);
+  assert.match(app, /async function enterRoom\(/);
+  assert.match(renderer, /export class AvatarRenderer/);
+  assert.match(audio, /export class AudioEngine/);
+  assert.match(overlay, /AvatarRenderer/);
+  assert.match(html, /id="avatarCanvas"/);
+  assert.match(html, /id="roomStage"/);
+  assert.match(html, /src="\.\/src\/app\.js\?v=/);
+});
