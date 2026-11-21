@@ -2103,7 +2103,8 @@ async function loadRoomMembers() {
 
 function renderRoomParticipants() {
   const canvas = $("roomStage");
-  const width = 1920, height = 1080;
+  const width = 1920;
+  const height = 1080;
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   canvas.style.aspectRatio = "16 / 9";
   const ctx = canvas.getContext("2d");
