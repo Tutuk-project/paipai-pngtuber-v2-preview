@@ -170,12 +170,15 @@ test("GO Collaboration opens Host/Join chooser even while a personal Solo OBS ro
 
 test("GO Collaboration shared stage uses a dedicated landscape canvas", () => {
   const app = read("src/app.js");
-  const stage = app.match(/function renderRoomParticipants\(\)[\s\S]*?function drawRoomStageFrame/)?.[0] || "";
+  const stage = app.match(/function renderRoomParticipants\\(\\)[\\s\\S]*?function drawRoomStageFrame/)?.[0] || "";
   assert.match(stage, /const width = 1920/);
-  assert.match(stage, /const height = 1080/);\n  assert.match(stage, /16 \/ 9/);\n  const css = read("assets/app.css");\n  assert.match(css, /#roomStage\\{[^}]*aspect-ratio:16\\/9!important/);
-  assert.match(stage, /16 \/ 9/);
+  assert.match(stage, /const height = 1080/);
+  assert.match(stage, /16 \\/ 9/);
+  const css = read("assets/app.css");
+  assert.match(css, /#roomStage\\{[^}]*aspect-ratio:16\\/9!important/);
+  assert.match(css, /collab-stage-wrap>canvas\\{[^}]*aspect-ratio:16\\/9!important/);
   const overlay = read("src/overlay.js");
-  assert.match(overlay, /isCollaborationRoom\s*=\s*roomPurpose === "collaboration"/);
+  assert.match(overlay, /isCollaborationRoom\\s*=\\s*roomPurpose === "collaboration"/);
 });
 
 test("room layout sliders update the local member renderer immediately", () => {
