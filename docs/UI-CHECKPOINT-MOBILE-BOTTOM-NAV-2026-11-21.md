@@ -188,3 +188,10 @@ On the user's POCO X7 Pro / Chrome Android and then inside the intended OBS Brow
 7. Verify Solo output sizing still follows the Solo profile output dimensions and verify Collaboration remains the selected room-stage dimensions.
 
 Do not report the OBS fixes as device-verified until these checks are completed. Classify any failure as permission/browser host, audio state, guide compositing, output sizing/layout, or avatar asset-transition issue before changing code.
+
+
+### User-provided video review
+- Reviewed the supplied 3.58-second Android screen recording (1220×2712).
+- It shows the deployed GO Collaboration page, room code `5461`, one of two available participant slots, microphone status `Mic active`, and the participant state alternating between `TALKING` and `IDLE`.
+- The Creator-side Collaboration stage displays the avatar over the checkerboard transparency preview.
+- This video confirms the Creator Collaboration preview/mic state behavior at that moment. It does not show the OBS Browser Source output, so it does not validate the clean OBS page, OBS-side microphone permission, or output guide compositing.
