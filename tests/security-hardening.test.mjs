@@ -330,17 +330,13 @@ test("AudioEngine reduces mic detection latency without removing noise gating", 
 });
 
 
-test("mobile navigation moves to a labeled bottom dock without replacing Vio branding or menu icons", () => {
+
+test("navigation keeps its original sidebar DOM placement", () => {
   const app = read("src/app.js");
   const css = read("assets/app.css");
-  const html = read("index.html");
-  assert.match(html, /class="sidebar-brand"/);
-  assert.match(html, /class="brand-mark"/);
-  assert.match(app, /window\.matchMedia\("\(max-width: 900px\)"\)/);
-  assert.match(app, /nav\.append\(logoutButton\)/);
-  assert.match(css, /@media\(max-width:900px\)/);
-  assert.match(css, /\.sidebar \.nav-icon\{display:block!important/);
-  assert.match(css, /\.sidebar \.nav-label\{display:block!important/);
-  assert.match(css, /\.sidebar-brand\{/);
-  assert.match(css, /safe-area-inset-bottom/);
+  assert.match(app, /const logoutButton = \$\("logoutButton"\);/);
+  assert.match(app, /\.querySelector\("\.sidebar-bottom"\)\.append\(logoutButton\)/);
+  assert.doesNotMatch(app, /matchMedia\("\(max-width: 900px\)"\)/);
+  assert.doesNotMatch(app, /nav\.append\(logoutButton\)/);
+  assert.doesNotMatch(css, /Mobile navigation refresh/);
 });
