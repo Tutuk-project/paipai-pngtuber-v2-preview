@@ -2,7 +2,7 @@ name: Deploy Vio Studio v2 Preview
 
 on:
   workflow_run:
-    workflows: ["Preview validation"]
+    workflows: ["Validate Vio Studio"]
     types: [completed]
     branches: [main]
 
