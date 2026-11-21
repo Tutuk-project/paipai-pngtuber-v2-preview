@@ -125,26 +125,28 @@ test("new Solo OBS rooms publish the current microphone state after Realtime sub
   assert.match(generator, /await subscribeRoom\(room\.id\);[\s\S]*?await loadRoomMembers\(\);[\s\S]*?await broadcastPlayerState\(currentMicState\)/);
 });
 
-test("collaboration and OBS snapshots pass profile preferences and active-character assets to the shared renderer", () => {
-  const edge = read("supabase/functions/vio-api/index.ts");
-  const app = read("src/app.js");
-  const overlay = read("src/overlay.js");
+test("room snapshots retain signed assets and the shared resolver isolates participant backgrounds", async () => {
+  const { resolveRoomAvatarLayouts, resolveRoomBackgroundPreferences } = await import("../src/avatar-renderer.js");
+  const members = [
+    { user_id: "joiner", joined_at: "2026-11-21T04:01:00Z", preferences: { background: { mode: "image", src: "joiner-private" } }, assets: { idle: "joiner-signed-idle" }, accessories: [{ src: "joiner-signed-accessory" }] },
+    { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z", preferences: { background: { mode: "image", src: "host-signed-private" } }, assets: { idle: "host-signed-idle" }, accessories: [{ src: "host-signed-accessory" }] }
+  ];
+  const layouts = resolveRoomAvatarLayouts(members, 1920, 1080);
+  assert.deepEqual(layouts.map(item => item.member.assets.idle), ["host-signed-idle", "joiner-signed-idle"]);
+  assert.deepEqual(layouts.map(item => item.member.accessories[0].src), ["host-signed-accessory", "joiner-signed-accessory"]);
+  assert.deepEqual(resolveRoomBackgroundPreferences(members), { background: { mode: "image", src: "host-signed-private" } });
+  assert.ok(layouts.every(item => item.spriteProfile.background.mode === "transparent"));
+  const edge = read("supabase/functions/vio-api/index.ts"), app = read("src/app.js"), overlay = read("src/overlay.js");
   for (const action of ["room_members", "overlay_connect"]) {
-    const start = edge.indexOf('if (action === "' + action + '")');
-    const next = edge.indexOf('if (action === "', start + 10);
-    const handler = start >= 0 ? edge.slice(start, next > start ? next : undefined) : "";
-    assert.match(handler, /active_character_id/);
-    assert.match(handler, /preferences/);
-    assert.match(handler, /vio_character_assets/);
+    const start = edge.indexOf('if (action === "' + action + '")'), next = edge.indexOf('if (action === "', start + 10);
+    assert.match(edge.slice(start, next > start ? next : undefined), /preferences: await signBackground\(db,/);
   }
-  assert.match(app, /entry\.renderer\.setPreferences\(profile\)/);
-  assert.match(app, /entry\.renderer\.setAssets\(assets\)/);
-  assert.match(app, /entry\.renderer\.setAccessories\(accessories\)/);
-  assert.match(overlay, /renderer\.setPreferences\(profile\)/);
-  assert.match(overlay, /renderer\.setAssets\(assets\)/);
-  assert.match(overlay, /renderer\.setAccessories\(accessories\)/);
+  assert.match(edge, /function signBackground\(db,[\s\S]*?createSignedUrl\(background\.storage_path, 3600\)/);
+  assert.match(app, /resolveRoomBackgroundPreferences\(roomMembers\)/);
+  assert.match(overlay, /resolveRoomBackgroundPreferences\(members\)/);
+  assert.match(app, /roomBackgroundRenderer\.setPreferences\(hostBackground\)/);
+  assert.match(overlay, /roomBackgroundRenderer\.setPreferences\(hostBackground\)/);
 });
-
 
 test("legacy global Visual Effect setting enables configured effect objects without per-effect enabled flags", async () => {
   const { normalizeEffects } = await import("../src/avatar-renderer.js");
@@ -184,12 +186,26 @@ test("GO Collaboration shared stage uses a dedicated landscape canvas", () => {
   assert.ok(overlay.includes('roomPurpose === "collaboration"'));
 });
 
-test("room layout sliders update the local member renderer immediately", () => {
-  const app = read("src/app.js");
-  const controls = app.match(/function renderRoomControls\([^)]*\)[\s\S]*?async function subscribeRoom/)?.[0] || "";
-  const stage = app.match(/function renderRoomParticipants\(\)[\s\S]*?function drawRoomStageFrame/)?.[0] || "";
-  assert.match(controls, /ownMember\.overrides = \{ \.\.\.\(ownMember\.overrides \|\| \{\}\), \[item\.key\]: value \}/);
-  assert.match(stage, /member\.user_id === currentUser\.id[\s\S]*?\.\.\.roomOverrides/);
+test("layout ownership is enforced by client model updates, authenticated server writes and RLS", async () => {
+  const { mergeRoomMemberOverrides } = await import("../src/avatar-renderer.js");
+  const members = [{ user_id: "alice", overrides: { x: 0 } }, { user_id: "bob", overrides: { x: 30 } }];
+  assert.equal(mergeRoomMemberOverrides(members, "alice", "bob", { x: 88 }), members);
+  assert.deepEqual(mergeRoomMemberOverrides(members, "alice", "alice", { x: 12 }).map(member => member.overrides.x), [12, 30]);
+  const app = read("src/app.js"), edge = read("supabase/functions/vio-api/index.ts");
+  const migration = read("supabase/migrations/011_room_override_owner_rls.sql");
+  const appEvent = app.slice(app.indexOf('.on("broadcast", { event: "player-layout" }'), app.indexOf('.on("broadcast", { event: "member-assets-updated" }'));
+  assert.doesNotMatch(appEvent, /payload\.overrides|member\.overrides\s*=/);
+  assert.match(appEvent, /loadRoomMembers\(\)/);
+  assert.match(app, /mergeRoomMemberOverrides\(roomMembers, currentUser\?\.id, currentUser\?\.id/);
+  const start = edge.indexOf('if (action === "set_room_override")'), end = edge.indexOf('if (action === "record_asset")', start);
+  const handler = edge.slice(start, end);
+  assert.match(handler, /requireUser\(\)/);
+  assert.match(handler, /eq\("user_id", user\.id\)/);
+  assert.match(handler, /user_id: user\.id/);
+  assert.match(handler, /body\.user_id !== user\.id/);
+  assert.match(migration, /for all to authenticated/i);
+  assert.match(migration, /using\s*\([\s\S]*user_id = vio_private\.vio_current_app_user_id\(\)[\s\S]*vio_private\.vio_is_room_member\(room_id\)/i);
+  assert.match(migration, /with check\s*\([\s\S]*user_id = vio_private\.vio_current_app_user_id\(\)[\s\S]*vio_private\.vio_is_room_member\(room_id\)/i);
 });
 
 test("OBS overlay automatically requests microphone access for Solo and Collaboration", () => {
@@ -411,14 +427,16 @@ test("Creator Studio mobile dock has the requested five workspace tabs", () => {
   assert.match(css, /\.app-shell\.in-room \.mobile-bottom-nav\s*\{\s*display: none !important/);
 });
 
-test("mobile navigation does not replace avatar, audio, OBS, backend, or Collaboration engines", () => {
-  const app = read("src/app.js");
-  const renderer = read("src/avatar-renderer.js");
-  const audio = read("src/audio-engine.js");
-  const overlay = read("src/overlay.js");
-  const html = read("index.html");
-  assert.match(app, /import \{ AudioEngine \} from "\.\/audio-engine\.js\?v=/);
-  assert.match(app, /import \{ AvatarRenderer, resolveRoomAvatarPreferences \} from "\.\/avatar-renderer\.js\?v=/);
+test("mobile navigation preserves page engines and one avatar module identity per page", () => {
+  const app = read("src/app.js"), renderer = read("src/avatar-renderer.js"), audio = read("src/audio-engine.js"), overlay = read("src/overlay.js"), html = read("index.html");
+  const versionsForPage = source => [...source.matchAll(/(?:from\s*|import\s*)["']([^"']*avatar-renderer\.js(?:\?[^"']*)?)["']/g)]
+    .map(match => new URL(match[1], "https://vio.invalid/").searchParams.get("v"));
+  for (const [page, source] of [["Creator", app], ["OBS overlay", overlay]]) {
+    const versions = versionsForPage(source);
+    assert.ok(versions.length > 0, page + " must import avatar-renderer.js");
+    assert.ok(versions.every(Boolean), page + " imports must carry a cache version");
+    assert.equal(new Set(versions).size, 1, page + " must not create duplicate renderer module instances");
+  }
   assert.match(app, /function drawPreview\(\)/);
   assert.match(app, /async function generateOverlayLink\(/);
   assert.match(app, /async function enterRoom\(/);
@@ -429,7 +447,6 @@ test("mobile navigation does not replace avatar, audio, OBS, backend, or Collabo
   assert.match(html, /id="roomStage"/);
   assert.match(html, /src="\.\/src\/app\.js\?v=/);
 });
-
 
 test("Collaboration OBS output stays transparent and never renders editor-only guide layers", () => {
   const overlay = read("src/overlay.js");
@@ -449,18 +466,24 @@ test("AvatarRenderer preserves the last decoded PNG while a new expression is lo
 });
 
 
-test("Collaboration Creator and OBS use one canonical room-layout transform", () => {
-  const app = read("src/app.js");
-  const overlay = read("src/overlay.js");
-  const renderer = read("src/avatar-renderer.js");
-  assert.match(app, /resolveRoomAvatarPreferences\(profile, overrides, playerWidth, playerHeight, index, visible\.length\)/);
-  assert.match(overlay, /resolveRoomAvatarPreferences\(profile, overrides, width, canvas\.height, memberIndex, members\.length\)/);
-  assert.match(renderer, /export function resolveRoomAvatarPreferences\(/);
-  assert.match(renderer, /setRoomLayout\(layout = \{\}\)/);
-  assert.doesNotMatch(app, /offsetX: Math\.max\(-100/);
-  assert.doesNotMatch(overlay, /preferences\.offsetX = Math\.max\(-100/);
+test("Creator and OBS share canonical room-layout outputs for one through four members", async () => {
+  const { resolveRoomAvatarLayouts } = await import("../src/avatar-renderer.js");
+  const app = read("src/app.js"), overlay = read("src/overlay.js");
+  const members = [
+    { user_id: "host", is_host: true, joined_at: "2026-11-21T04:00:00Z" },
+    { user_id: "b", joined_at: "2026-11-21T04:01:00Z" },
+    { user_id: "c", joined_at: "2026-11-21T04:02:00Z" },
+    { user_id: "d", joined_at: "2026-11-21T04:03:00Z" }
+  ];
+  for (let count = 1; count <= 4; count++) {
+    const input = members.slice(0, count);
+    const creator = resolveRoomAvatarLayouts(input, 1920, 1080);
+    const obs = resolveRoomAvatarLayouts([...input].reverse(), 1920, 1080);
+    assert.deepEqual(creator.map(item => [item.member.user_id, item.preferences.offsetX]), obs.map(item => [item.member.user_id, item.preferences.offsetX]));
+  }
+  assert.match(app, /resolveRoomAvatarLayouts\(roomMembers/);
+  assert.match(overlay, /resolveRoomAvatarLayouts\(orderedMembers/);
 });
-
 
 test("AudioEngine retries a suspended context on the first invisible user interaction", () => {
   const audio = read("src/audio-engine.js");
@@ -492,7 +515,7 @@ test("dummy composition guide layers above participant backgrounds in Creator pr
 test("OBS Solo renderer applies complete member preferences before its direct render loop starts", () => {
   const overlay = read("src/overlay.js");
   const renderer = overlay.slice(overlay.indexOf("function ensurePlayerRenderer"), overlay.indexOf("function updateLocalMicState"));
-  assert.ok(renderer.indexOf("renderer.setPreferences(profile)") < renderer.indexOf("renderer.start()"));
-  assert.ok(renderer.indexOf("renderer.setPreferences(profile)") < renderer.indexOf("renderer.setAssets(assets)"));
+  assert.ok(renderer.indexOf("renderer.setPreferences(spriteProfile)") < renderer.indexOf("renderer.start()"));
+  assert.ok(renderer.indexOf("renderer.setPreferences(spriteProfile)") < renderer.indexOf("renderer.setAssets(assets)"));
   assert.ok(renderer.includes("drawDirectlyToStage"));
 });
