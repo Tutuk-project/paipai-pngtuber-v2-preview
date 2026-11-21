@@ -513,5 +513,6 @@ test("accessory editor has declared pointer state, independent transform control
   assert.match(app, /bounds\.halfHeight/);
   assert.match(renderer, /accessoryRotation \* Math\.PI \/ 180/);
   assert.match(edge, /"w", "h", "rotation"/);
+  assert.match(edge, /vio_character_accessories\\(id,name,storage_path,bucket_id,x,y,w,h,rotation/);
   assert.match(edge, /rotation: item\.rotation \|\| 0/);
 });
