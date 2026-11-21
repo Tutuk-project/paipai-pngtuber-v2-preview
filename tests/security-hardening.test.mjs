@@ -319,7 +319,7 @@ test("OBS overlay has no visible buttons or control panels in either mode", () =
   const html = read("overlay.html");
   const overlay = read("src/overlay.js");
   assert.doesNotMatch(html, /<button|<select|overlay-controls|overlayControlsShow/);
-  assert.match(html, /\.debug \.status\{display:block\}/);
+  assert.match(html, /\.debug \.status,\.status\.is-visible\{display:block\}/);
   assert.match(overlay, /if \(localMicUserId\) void startOverlayMicrophone\(\)/);
 });
 
