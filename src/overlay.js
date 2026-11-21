@@ -26,6 +26,8 @@ const params = new URLSearchParams(location.search);
 let centerGuideEnabled = params.get("centerGuide") === "1";
 let controlsVisible = params.get("controls") === "1";
 let gridEnabled = params.get("grid") === "1";
+let gridUserOverride = false;
+let centerGuideUserOverride = false;
 let realtimeConnected = false;
 
 function setStatus(message, error = false, forceVisible = true) {
@@ -208,8 +210,8 @@ function bindOverlayControls() {
     if (host) host.preferences = { ...(host.preferences || {}), deviceId };
     await startOverlayMicrophone();
   });
-  document.getElementById("overlayGridToggle")?.addEventListener("click", () => { gridEnabled = !gridEnabled; updateOverlayControlState(); render(); });
-  document.getElementById("overlayCenterToggle")?.addEventListener("click", () => { centerGuideEnabled = !centerGuideEnabled; updateOverlayControlState(); render(); });
+  document.getElementById("overlayGridToggle")?.addEventListener("click", () => { gridUserOverride = true; gridEnabled = !gridEnabled; updateOverlayControlState(); render(); });
+  document.getElementById("overlayCenterToggle")?.addEventListener("click", () => { centerGuideUserOverride = true; centerGuideEnabled = !centerGuideEnabled; updateOverlayControlState(); render(); });
   document.getElementById("overlayControlsHide")?.addEventListener("click", () => { controlsVisible = false; updateOverlayControlState(); });
   document.getElementById("overlayControlsShow")?.addEventListener("click", () => { controlsVisible = true; updateOverlayControlState(); });
   updateOverlayControlState();
@@ -293,8 +295,8 @@ async function refreshMembers() {
     setStatus("Overlay terhubung ke server, tetapi daftar peserta room kosong. Pastikan room masih aktif dan akun pembuat link masih menjadi anggota.", true);
     return;
   }
-  gridEnabled = gridEnabled || members.some(member => member.overrides?.showGrid === true);
-  centerGuideEnabled = centerGuideEnabled || members.some(member => member.overrides?.showCenterGuide === true);
+  if (!gridUserOverride) gridEnabled = members.some(member => member.overrides?.showGrid === true) || params.get("grid") === "1";
+  if (!centerGuideUserOverride) centerGuideEnabled = members.some(member => member.overrides?.showCenterGuide === true) || params.get("centerGuide") === "1";
   updateOverlayControlState();
   const hasAvatarAssets = members.some(member => Object.values(member.assets || {}).some(Boolean));
   if (!hasAvatarAssets) {
