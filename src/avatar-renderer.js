@@ -162,10 +162,19 @@ export class AvatarRenderer {
   }
 
   setAssets(assets = {}) {
-    this.assets = { ...assets };
-    // Preserve the last decoded avatar while replacement expression images
-    // load. Reset only when the character has no image assets at all.
-    if (!Object.values(this.assets).some(Boolean)) this.lastGoodAvatarImage = null;
+    const nextAssets = { ...assets };
+    const nextAssetIdentity = JSON.stringify(
+      Object.entries(nextAssets).filter(([, src]) => Boolean(src)).sort(([a], [b]) => a.localeCompare(b))
+    );
+    // A last-good frame is safe only within the same character asset set.
+    // Otherwise a character switch can display the previous character while
+    // the new expression PNGs are still decoding (or after they fail).
+    if (this.assetIdentity !== nextAssetIdentity) {
+      this.assetIdentity = nextAssetIdentity;
+      this.lastGoodAvatarImage = null;
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    this.assets = nextAssets;
     Object.values(this.assets).forEach(src => this.image(src));
     this.pruneImageCache();
     this.drawOnce();
