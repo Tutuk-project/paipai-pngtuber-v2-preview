@@ -172,7 +172,7 @@ test("GO Collaboration shared stage uses a dedicated landscape canvas", () => {
   const app = read("src/app.js");
   const stage = app.match(/function renderRoomParticipants\(\)[\s\S]*?function drawRoomStageFrame/)?.[0] || "";
   assert.match(stage, /const width = 1920/);
-  assert.match(stage, /const height = 1080/);\n  assert.match(stage, /aspect-ratio:16\\/9/);
+  assert.match(stage, /const height = 1080/);\n  assert.match(stage, /16 \/ 9/);\n  const css = read("assets/app.css");\n  assert.match(css, /#roomStage\\{[^}]*aspect-ratio:16\\/9!important/);
   assert.match(stage, /16 \/ 9/);
   const overlay = read("src/overlay.js");
   assert.match(overlay, /isCollaborationRoom\s*=\s*roomPurpose === "collaboration"/);
