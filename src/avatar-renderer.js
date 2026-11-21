@@ -152,7 +152,10 @@ export class AvatarRenderer {
     image.decoding = "async";
     image.crossOrigin = "anonymous";
     image.onload = () => this.drawOnce();
-    image.onerror = () => this.images.set(src, null);
+    image.onerror = () => {
+      this.images.set(src, null);
+      this.drawOnce();
+    };
     image.src = src;
     this.images.set(src, image);
     return image;
