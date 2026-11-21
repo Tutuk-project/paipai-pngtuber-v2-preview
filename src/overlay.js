@@ -28,7 +28,7 @@ let centerGuideEnabled = params.get("centerGuide") === "1";
 let gridEnabled = params.get("grid") === "1";
 let realtimeConnected = false;
 let pollEndpointSupported = null;
-const BUILD_ID = "OBS-HUD-2026-11-21-r1";
+const BUILD_ID = "OBS-HUD-2026-11-21-r2";
 let debugHud = null;
 let debugHudTimer = 0;
 let realtimeStatus = "NOT_CONNECTED";
