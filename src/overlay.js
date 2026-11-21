@@ -526,6 +526,14 @@ async function boot() {
         refreshMembers().catch(error => setStatus(`Gagal memperbarui aset: ${error.message}`, true));
       })
       .on("presence", { event: "sync" }, () => {
+        const presentIds = new Set(Object.keys(channel.presenceState() || {}));
+        for (const member of members) {
+          if (!presentIds.has(member.user_id)) {
+            member.state = "idle";
+            states.set(member.user_id, "idle");
+          }
+        }
+        render();
         refreshMembers().catch(error => setStatus(`Sinkronisasi peserta gagal: ${error.message}`, true));
       });
     try {
